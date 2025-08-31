@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using System.Linq;
 
 namespace MyWebApi;
 
@@ -12,6 +13,10 @@ public sealed class MyWebApiHost : IAsyncDisposable
     private CancellationTokenSource? _linkedCts;
 
     public bool IsRunning => _app is not null;
+
+    // Events raised when /v1/start and /v1/end are posted
+    public event Func<StartCommand, Task>? StartRequested;
+    public event Func<EndCommand, Task>? EndRequested;
 
     // Sync wrappers as requested (Start/Stop)
     public void Start(int port, CancellationToken cancellationToken = default)
@@ -41,8 +46,24 @@ public sealed class MyWebApiHost : IAsyncDisposable
 
         // POST-only sample endpoints under versioned route group /v1
         var v1 = app.MapGroup("/v1");
-        v1.MapPost("/start", () => Results.Ok(new { message = "started" }));
-        v1.MapPost("/end", () => Results.Ok(new { message = "ended" }));
+        v1.MapPost("/start", async (StartCommand cmd) =>
+        {
+            if (StartRequested is not null)
+            {
+                var handlers = StartRequested.GetInvocationList().Cast<Func<StartCommand, Task>>();
+                await Task.WhenAll(handlers.Select(h => h(cmd)));
+            }
+            return Results.Ok(new { message = "started" });
+        });
+        v1.MapPost("/end", async (EndCommand cmd) =>
+        {
+            if (EndRequested is not null)
+            {
+                var handlers = EndRequested.GetInvocationList().Cast<Func<EndCommand, Task>>();
+                await Task.WhenAll(handlers.Select(h => h(cmd)));
+            }
+            return Results.Ok(new { message = "ended" });
+        });
 
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
