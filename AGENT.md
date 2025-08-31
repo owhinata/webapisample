@@ -38,6 +38,7 @@ hSettings.json`).
 - Feature/Fix commits: add a brief description body (what/why, and how to validate) below the title.
 - Chore commits: title only is sufficient; description body is optional.
 - Do not include escape sequences like \n in commit messages. For multi-line bodies, use multiple `-m` flags: `git commit -m "subject" -m "body line 1" -m "body line 2"`.
+- Wrap body lines at 80 characters (hard wrap paragraphs and bullet lines).
 - PRs: include purpose/summary, linked issue, how to validate (URL or curl), and screenshots of Swagger
   when UI changes.
 - Checks: PRs should build cleanly and keep public API changes documented in Swagger.
