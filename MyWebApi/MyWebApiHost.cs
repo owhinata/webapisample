@@ -22,7 +22,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
     public bool Start(int port, CancellationToken cancellationToken = default)
         => StartAsync(port, cancellationToken).GetAwaiter().GetResult();
 
-    public void Stop(CancellationToken cancellationToken = default)
+    public bool Stop(CancellationToken cancellationToken = default)
         => StopAsync(cancellationToken).GetAwaiter().GetResult();
 
     // Async counterparts
@@ -93,7 +93,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken = default)
+    public async Task<bool> StopAsync(CancellationToken cancellationToken = default)
     {
         WebApplication? app;
         CancellationTokenSource? linkedCts;
@@ -107,18 +107,21 @@ public sealed class MyWebApiHost : IAsyncDisposable
         }
 
         if (app is null)
-            return;
+            return false;
 
+        var success = false;
         try
         {
             linkedCts?.Cancel();
             await app.StopAsync(cancellationToken);
+            success = true;
         }
         finally
         {
             await app.DisposeAsync();
             linkedCts?.Dispose();
         }
+        return success;
     }
 
     public async ValueTask DisposeAsync()
