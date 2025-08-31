@@ -22,11 +22,13 @@ public class MyAppMainBlackBoxTests
         {
             app.Start(port);
             using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
-            var content = new StringContent("{\"message\":\"hello\"}", Encoding.UTF8, "application/json");
+            var body = "{\"message\":\"hello\"}";
+            var content = new StringContent(body, Encoding.UTF8, "application/json");
             var res = await client.PostAsync("/v1/start", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            StringAssert.Contains(received, "\"hello\"");
+            Assert.AreEqual(body, received, "IfUtility.HandleStart argument mismatch");
+            Assert.AreEqual(1, util.StartCallCount, "HandleStart should be called once");
         }
         finally
         {
@@ -46,11 +48,13 @@ public class MyAppMainBlackBoxTests
         {
             app.Start(port);
             using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
-            var content = new StringContent("{\"message\":\"bye\"}", Encoding.UTF8, "application/json");
+            var body = "{\"message\":\"bye\"}";
+            var content = new StringContent(body, Encoding.UTF8, "application/json");
             var res = await client.PostAsync("/v1/end", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            StringAssert.Contains(received, "\"bye\"");
+            Assert.AreEqual(body, received, "IfUtility.HandleEnd argument mismatch");
+            Assert.AreEqual(1, util.EndCallCount, "HandleEnd should be called once");
         }
         finally
         {
@@ -82,8 +86,22 @@ class TestIfUtility : IfUtility
 {
     private readonly TaskCompletionSource<string>? _startTcs;
     private readonly TaskCompletionSource<string>? _endTcs;
+    public int StartCallCount { get; private set; }
+    public int EndCallCount { get; private set; }
+    public string? LastStartArg { get; private set; }
+    public string? LastEndArg { get; private set; }
     public TestIfUtility(TaskCompletionSource<string>? startTcs, TaskCompletionSource<string>? endTcs)
     { _startTcs = startTcs; _endTcs = endTcs; }
-    public override void HandleStart(string json) { _startTcs?.TrySetResult(json); }
-    public override void HandleEnd(string json) { _endTcs?.TrySetResult(json); }
+    public override void HandleStart(string json)
+    {
+        StartCallCount++;
+        LastStartArg = json;
+        _startTcs?.TrySetResult(json);
+    }
+    public override void HandleEnd(string json)
+    {
+        EndCallCount++;
+        LastEndArg = json;
+        _endTcs?.TrySetResult(json);
+    }
 }
