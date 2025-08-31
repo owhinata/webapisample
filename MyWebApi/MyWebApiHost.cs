@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using System.Linq;
 using System.IO;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace MyWebApi;
 
@@ -45,8 +47,23 @@ public sealed class MyWebApiHost : IAsyncDisposable
         try
         {
             var builder = WebApplication.CreateBuilder(options);
+            // Configure global concurrency limiter: 1 concurrent request, no queue.
+            builder.Services.AddRateLimiter(o =>
+            {
+                o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
+                    RateLimitPartition.GetConcurrencyLimiter("global", _ => new ConcurrencyLimiterOptions
+                    {
+                        PermitLimit = 1,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+                    }));
+                o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            });
+
             app = builder.Build();
             app.Urls.Add($"http://0.0.0.0:{port}");
+            // Enable the rate limiter middleware
+            app.UseRateLimiter();
 
             // POST-only sample endpoints under versioned route group /v1
             var v1 = app.MapGroup("/v1");
