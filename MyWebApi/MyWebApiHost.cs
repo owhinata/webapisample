@@ -10,7 +10,6 @@ public sealed class MyWebApiHost : IAsyncDisposable
 {
     private readonly object _lock = new();
     private WebApplication? _app;
-    private Task? _runTask;
     private CancellationTokenSource? _linkedCts;
 
     public bool IsRunning => _app is not null;
@@ -20,19 +19,19 @@ public sealed class MyWebApiHost : IAsyncDisposable
     public event Func<string, Task>? EndRequested;
 
     // Sync wrappers as requested (Start/Stop)
-    public void Start(int port, CancellationToken cancellationToken = default)
+    public bool Start(int port, CancellationToken cancellationToken = default)
         => StartAsync(port, cancellationToken).GetAwaiter().GetResult();
 
     public void Stop(CancellationToken cancellationToken = default)
         => StopAsync(cancellationToken).GetAwaiter().GetResult();
 
     // Async counterparts
-    public async Task StartAsync(int port, CancellationToken cancellationToken = default)
+    public async Task<bool> StartAsync(int port, CancellationToken cancellationToken = default)
     {
         lock (_lock)
         {
             if (_app is not null)
-                throw new InvalidOperationException("Web API is already started.");
+                return false;
         }
 
         var options = new WebApplicationOptions
@@ -40,60 +39,70 @@ public sealed class MyWebApiHost : IAsyncDisposable
             ContentRootPath = AppContext.BaseDirectory,
         };
 
-        var builder = WebApplication.CreateBuilder(options);
-
-        var app = builder.Build();
-        app.Urls.Add($"http://0.0.0.0:{port}");
-
-        // POST-only sample endpoints under versioned route group /v1
-        var v1 = app.MapGroup("/v1");
-        v1.MapPost("/start", async (HttpRequest request) =>
+        WebApplication? app = null;
+        CancellationTokenSource? linkedCts = null;
+        try
         {
-            var body = await new StreamReader(request.Body).ReadToEndAsync();
-            if (StartRequested is not null)
+            var builder = WebApplication.CreateBuilder(options);
+            app = builder.Build();
+            app.Urls.Add($"http://0.0.0.0:{port}");
+
+            // POST-only sample endpoints under versioned route group /v1
+            var v1 = app.MapGroup("/v1");
+            v1.MapPost("/start", async (HttpRequest request) =>
             {
-                var handlers = StartRequested.GetInvocationList().Cast<Func<string, Task>>();
-                await Task.WhenAll(handlers.Select(h => h(body)));
-            }
-            return Results.Ok(new { message = "started" });
-        });
-        v1.MapPost("/end", async (HttpRequest request) =>
-        {
-            var body = await new StreamReader(request.Body).ReadToEndAsync();
-            if (EndRequested is not null)
+                var body = await new StreamReader(request.Body).ReadToEndAsync();
+                if (StartRequested is not null)
+                {
+                    var handlers = StartRequested.GetInvocationList().Cast<Func<string, Task>>();
+                    await Task.WhenAll(handlers.Select(h => h(body)));
+                }
+                return Results.Ok(new { message = "started" });
+            });
+            v1.MapPost("/end", async (HttpRequest request) =>
             {
-                var handlers = EndRequested.GetInvocationList().Cast<Func<string, Task>>();
-                await Task.WhenAll(handlers.Select(h => h(body)));
+                var body = await new StreamReader(request.Body).ReadToEndAsync();
+                if (EndRequested is not null)
+                {
+                    var handlers = EndRequested.GetInvocationList().Cast<Func<string, Task>>();
+                    await Task.WhenAll(handlers.Select(h => h(body)));
+                }
+                return Results.Ok(new { message = "ended" });
+            });
+
+            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            await app.StartAsync(linkedCts.Token);
+
+            lock (_lock)
+            {
+                _app = app;
+                _linkedCts = linkedCts;
             }
-            return Results.Ok(new { message = "ended" });
-        });
 
-        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        lock (_lock)
-        {
-            _app = app;
-            _linkedCts = linkedCts;
-            _runTask = app.RunAsync(linkedCts.Token);
+            return true;
         }
-
-        // Yield back to caller once hosting has begun
-        await Task.Yield();
+        catch
+        {
+            // Best-effort cleanup on failure
+            if (app is not null)
+            {
+                try { await app.DisposeAsync(); } catch { }
+            }
+            linkedCts?.Dispose();
+            return false;
+        }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         WebApplication? app;
-        Task? runTask;
         CancellationTokenSource? linkedCts;
 
         lock (_lock)
         {
             app = _app;
-            runTask = _runTask;
             linkedCts = _linkedCts;
             _app = null;
-            _runTask = null;
             _linkedCts = null;
         }
 
@@ -109,10 +118,6 @@ public sealed class MyWebApiHost : IAsyncDisposable
         {
             await app.DisposeAsync();
             linkedCts?.Dispose();
-            if (runTask is not null)
-            {
-                try { await runTask; } catch { /* ignore */ }
-            }
         }
     }
 
