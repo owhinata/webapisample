@@ -80,7 +80,7 @@ public class MyAppMainBlackBoxTests
     }
 }
 
-file static class TcsExtensions { public static async Task<T> TimeoutAfter<T>(this Task<T> task, TimeSpan timeout) { using var cts = new CancellationTokenSource(timeout); var completed = await Task.WhenAny(task, Task.Delay(Timeout.InfiniteTimeSpan, cts.Token)); if (completed == task) return await task; throw new TimeoutException(); } }
+
 
 class TestIfUtility : IfUtility
 {
