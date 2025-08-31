@@ -21,10 +21,13 @@ hSettings.json`).
 - APIs: prefer minimal APIs/route groups; keep routes kebab-case (e.g., `/weather-forecasts`).
 
 ## Testing Guidelines
-- No test project is included by default. Recommended: xUnit under `tests/MyWebApi.Tests`.
-- Create tests: `dotnet new xunit -o tests/MyWebApi.Tests` then `dotnet add tests/MyWebApi.Tests refere
-nce MyWebApi.csproj`.
-- Name tests `ClassNameTests.cs`; keep fast and deterministic; run with `dotnet test`.
+- Framework: MSTest v2 in `MyWebApi.Tests` (net8.0).
+- Style: Black-box tests that start `MyWebApiHost` on a free port and call endpoints with `HttpClient`.
+- Create project: `dotnet new mstest -n MyWebApi.Tests` then `dotnet add MyWebApi.Tests/MyWebApi.Tests.csproj reference MyWebApi/MyWebApi.csproj`.
+- Run tests: `dotnet test MyWebApi.Tests -c Release` (or `--no-build` after a successful build).
+- List/filter tests: `dotnet test MyWebApi.Tests --list-tests` / `dotnet test MyWebApi.Tests --filter "FullyQualifiedName~MyWebApiHostBlackBoxTests"`.
+- Ports: Allocate a free port per test (e.g., bind `TcpListener` to port 0) to avoid conflicts in parallel runs.
+- Optional in-proc testing: If needed, use `Microsoft.AspNetCore.TestHost` and refactor host wiring to allow in-memory testing without opening sockets.
 
 ## Commit & Pull Request Guidelines
 - Commits: use Conventional Commits (e.g., `feat: add weather endpoint`, `fix: handle null summary`).
@@ -38,4 +41,3 @@ nce MyWebApi.csproj`.
 - Config: prefer `appsettings.Development.json` and environment variables; never commit secrets — use `
 dotnet user-secrets` in Development.
 - CORS/HTTPS: keep `app.UseHttpsRedirection()` in place; configure CORS explicitly per environment.
-
