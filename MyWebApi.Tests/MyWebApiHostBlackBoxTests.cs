@@ -22,12 +22,12 @@ public class MyWebApiHostBlackBoxTests
 
             using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
 
-            var r1 = await client.PostAsync("/start", new StringContent("", Encoding.UTF8, "application/json"));
+            var r1 = await client.PostAsync("/v1/start", new StringContent("", Encoding.UTF8, "application/json"));
             Assert.AreEqual(HttpStatusCode.OK, r1.StatusCode);
             var body1 = await r1.Content.ReadAsStringAsync();
             Assert.IsTrue(body1.Contains("started", StringComparison.OrdinalIgnoreCase), body1);
 
-            var r2 = await client.PostAsync("/end", new StringContent("", Encoding.UTF8, "application/json"));
+            var r2 = await client.PostAsync("/v1/end", new StringContent("", Encoding.UTF8, "application/json"));
             Assert.AreEqual(HttpStatusCode.OK, r2.StatusCode);
             var body2 = await r2.Content.ReadAsStringAsync();
             Assert.IsTrue(body2.Contains("ended", StringComparison.OrdinalIgnoreCase), body2);
@@ -63,4 +63,3 @@ public class MyWebApiHostBlackBoxTests
         return port;
     }
 }
-

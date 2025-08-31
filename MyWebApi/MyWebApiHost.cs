@@ -39,9 +39,10 @@ public sealed class MyWebApiHost : IAsyncDisposable
         var app = builder.Build();
         app.Urls.Add($"http://0.0.0.0:{port}");
 
-        // POST-only sample endpoints
-        app.MapPost("/start", () => Results.Ok(new { message = "started" }));
-        app.MapPost("/end", () => Results.Ok(new { message = "ended" }));
+        // POST-only sample endpoints under versioned route group /v1
+        var v1 = app.MapGroup("/v1");
+        v1.MapPost("/start", () => Results.Ok(new { message = "started" }));
+        v1.MapPost("/end", () => Results.Ok(new { message = "ended" }));
 
         var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 

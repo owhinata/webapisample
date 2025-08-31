@@ -44,8 +44,8 @@ host.Stop();
 ```
 
 Test the endpoints while running:
-- `curl -X POST http://localhost:5008/start` → `{ "message": "started" }`
-- `curl -X POST http://localhost:5008/end` → `{ "message": "ended" }`
+- `curl -X POST http://localhost:5008/v1/start` → `{ "message": "started" }`
+- `curl -X POST http://localhost:5008/v1/end` → `{ "message": "ended" }`
 
 **Run A Minimal Console Host (optional)**
 Create a tiny console app to try it out locally.
@@ -68,8 +68,8 @@ await Task.Delay(Timeout.InfiniteTimeSpan);
 ```
 
 **Endpoints**
-- POST `/start`: Returns `200 OK` with `{ message: "started" }`.
-- POST `/end`: Returns `200 OK` with `{ message: "ended" }`.
+- POST `/v1/start`: Returns `200 OK` with `{ message: "started" }`.
+- POST `/v1/end`: Returns `200 OK` with `{ message: "ended" }`.
 
 Both endpoints are mapped via minimal APIs inside `MyWebApiHost` and are intentionally stateless for the sample. Extend the handlers as needed.
 
