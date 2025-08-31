@@ -8,6 +8,8 @@ A minimal .NET 8 class library that self‑hosts an ASP.NET Core Web API. It exp
 - POST endpoints: `/start`, `/end` returning JSON.
 - Targets `net8.0` and references `Microsoft.AspNetCore.App`.
 
+For the full system architecture (MyWebApi, MyAppMain, ExternalLib) and testing approach, see `docs/DESIGN.md`.
+
 **Project Layout**
 - `MyWebApi/` — Library project
   - `MyWebApi.csproj` — `net8.0` with `Microsoft.AspNetCore.App` framework reference

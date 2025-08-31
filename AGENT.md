@@ -14,6 +14,9 @@ hSettings.json`).
 - Hot reload: `dotnet watch run` — rebuilds on file changes.
 - Unit tests: `dotnet test` — runs tests when a test project exists.
 
+## Documentation
+- High-level architecture and integration notes live in `docs/DESIGN.md`.
+
 ## Coding Style & Naming Conventions
 - C#: 4-space indent, file-scoped namespaces, `nullable` enabled, implicit usings on (see `.csproj`).
 - Names: PascalCase for types/methods, camelCase for locals/parameters, interfaces prefixed `I`.
