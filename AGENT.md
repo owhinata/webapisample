@@ -34,8 +34,11 @@ hSettings.json`).
 
 ## Commit & Pull Request Guidelines
 - Commits: use Conventional Commits (e.g., `feat: add weather endpoint`, `fix: handle null summary`).
+- Subject line: single line, max 80 characters.
+- Feature/Fix commits: add a brief description body (what/why, and how to validate) below the title.
+- Chore commits: title only is sufficient; description body is optional.
 - PRs: include purpose/summary, linked issue, how to validate (URL or curl), and screenshots of Swagger
- when UI changes.
+  when UI changes.
 - Checks: PRs should build cleanly and keep public API changes documented in Swagger.
 
 ## Security & Configuration Tips
