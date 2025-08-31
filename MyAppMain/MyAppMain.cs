@@ -4,11 +4,11 @@ namespace MyAppMain;
 
 public sealed class MyAppMain
 {
-    private readonly Func<StartCommand, Task> _onStart;
-    private readonly Func<EndCommand, Task> _onEnd;
+    private readonly Func<string, Task> _onStart;
+    private readonly Func<string, Task> _onEnd;
     private readonly MyWebApiHost _host = new();
 
-    public MyAppMain(Func<StartCommand, Task> onStart, Func<EndCommand, Task> onEnd)
+    public MyAppMain(Func<string, Task> onStart, Func<string, Task> onEnd)
     {
         _onStart = onStart ?? (_ => Task.CompletedTask);
         _onEnd = onEnd ?? (_ => Task.CompletedTask);
@@ -30,4 +30,3 @@ public sealed class MyAppMain
         _host.EndRequested -= _onEnd;
     }
 }
-

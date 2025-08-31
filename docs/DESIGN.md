@@ -8,7 +8,7 @@
 ## Components
 - `MyWebApi` (existing)
   - Self‑hosts Kestrel, exposes versioned endpoints `/v1/start` and `/v1/end`.
-  - Raises events with deserialized POST payloads.
+  - Raises events with raw POST body strings.
 - `MyAppMain` (new)
   - Orchestrator that wraps `MyWebApiHost` with `Start(int port)` / `Stop()`.
   - Subscribes to `MyWebApi` events and invokes application logic delegates wired to `ExternalLib`.
@@ -16,26 +16,21 @@
   - Contains real application logic methods (sync/async, static/instance). No changes required.
 
 ## Public Contracts
-Defined in `MyWebApi` and used across the system.
+To avoid coupling to MyWebApi types, events and delegates use raw JSON strings.
 
 ```csharp
-// Request DTOs (event payloads)
-public sealed record StartCommand(string? Message);
-public sealed record EndCommand(string? Message);
-
 // Events exposed by MyWebApiHost (async delegates for flexibility)
-public event Func<StartCommand, Task>? StartRequested;
-public event Func<EndCommand, Task>? EndRequested;
+public event Func<string, Task>? StartRequested; // raw body
+public event Func<string, Task>? EndRequested;   // raw body
 ```
 
 Notes:
-- Use `Func<T, Task>` for async compatibility. If handlers are sync, return `Task.CompletedTask`.
-- We intentionally avoid `EventHandler<T>` because it requires `T : EventArgs` and adds no value here.
+- Use `Func<string, Task>` for async compatibility. If handlers are sync, return `Task.CompletedTask`.
 
 ## Data Flow
 1. Client sends `POST /v1/start` or `/v1/end` with JSON body `{ "message": "..." }`.
-2. Minimal API model binding maps JSON to `StartCommand`/`EndCommand`.
-3. `MyWebApiHost` raises `StartRequested`/`EndRequested` events with the DTOs.
+2. Minimal API reads the body as a string.
+3. `MyWebApiHost` raises `StartRequested`/`EndRequested` with the raw JSON string.
 4. `MyAppMain` subscribed handlers are invoked; they call into `ExternalLib` via delegates.
 
 ## MyAppMain Responsibilities
@@ -44,8 +39,8 @@ Notes:
   - `Stop()`: Stops `MyWebApiHost` and unsubscribes handlers.
 - Integration points:
   - Accepts two delegates in constructor:
-    - `Func<StartCommand, Task> onStart`
-    - `Func<EndCommand, Task> onEnd`
+    - `Func<string, Task> onStart`
+    - `Func<string, Task> onEnd`
   - These delegates typically wrap existing `ExternalLib` methods.
 
 Example wiring (no changes to ExternalLib required):
@@ -54,8 +49,8 @@ Example wiring (no changes to ExternalLib required):
 // ExternalLib usage examples
 var external = new ExternalLib.Service();
 var app = new MyAppMain(
-    onStart: cmd => external.HandleStartAsync(cmd.Message),
-    onEnd:   cmd => external.HandleEndAsync(cmd.Message)
+    onStart: json => external.HandleStartAsync(json),
+    onEnd:   json => external.HandleEndAsync(json)
 );
 
 app.Start(5008);
@@ -74,8 +69,8 @@ app.Stop();
 ## Testing Strategy (Black‑Box)
 - Test project `MyAppMain.Tests` uses MSTest.
 - Start `MyAppMain` on a free port.
-- Inject fake delegates that complete `TaskCompletionSource<T>` when invoked.
-- Use `HttpClient` to POST to `/v1/start` and `/v1/end` and assert that fakes were called with expected payloads.
+- Inject fake delegates that complete `TaskCompletionSource<string>` when invoked.
+- Use `HttpClient` to POST to `/v1/start` and `/v1/end` and assert that fakes were called and contain expected JSON.
 - Use a helper to allocate a free port by binding `TcpListener` to port 0.
 
 Example test sketch:
@@ -84,8 +79,8 @@ Example test sketch:
 [TestMethod]
 public async Task Posting_Start_Triggers_External_Handler()
 {
-    var startTcs = new TaskCompletionSource<StartCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var app = new MyAppMain(cmd => { startTcs.SetResult(cmd); return Task.CompletedTask; }, _ => Task.CompletedTask);
+    var startTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var app = new MyAppMain(json => { startTcs.SetResult(json); return Task.CompletedTask; }, _ => Task.CompletedTask);
     var port = GetFreePort();
     try
     {
@@ -94,7 +89,7 @@ public async Task Posting_Start_Triggers_External_Handler()
         var res = await client.PostAsync("/v1/start", new StringContent("{\"message\":\"hello\"}", Encoding.UTF8, "application/json"));
         Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
         var received = await startTcs.Task.TimeoutAfter(TimeSpan.FromSeconds(3));
-        Assert.AreEqual("hello", received.Message);
+        StringAssert.Contains(received, "\"hello\"");
     }
     finally { app.Stop(); }
 }
@@ -114,4 +109,3 @@ public async Task Posting_Start_Triggers_External_Handler()
 - Should start/end be idempotent or carry correlation IDs?
 - Backpressure/queueing if handlers are long‑running.
 - Structured logging and diagnostics events.
-

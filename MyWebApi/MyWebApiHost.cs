@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using System.Linq;
+using System.IO;
 
 namespace MyWebApi;
 
@@ -14,9 +15,9 @@ public sealed class MyWebApiHost : IAsyncDisposable
 
     public bool IsRunning => _app is not null;
 
-    // Events raised when /v1/start and /v1/end are posted
-    public event Func<StartCommand, Task>? StartRequested;
-    public event Func<EndCommand, Task>? EndRequested;
+    // Events raised when /v1/start and /v1/end are posted (raw JSON/body string)
+    public event Func<string, Task>? StartRequested;
+    public event Func<string, Task>? EndRequested;
 
     // Sync wrappers as requested (Start/Stop)
     public void Start(int port, CancellationToken cancellationToken = default)
@@ -46,21 +47,23 @@ public sealed class MyWebApiHost : IAsyncDisposable
 
         // POST-only sample endpoints under versioned route group /v1
         var v1 = app.MapGroup("/v1");
-        v1.MapPost("/start", async (StartCommand cmd) =>
+        v1.MapPost("/start", async (HttpRequest request) =>
         {
+            var body = await new StreamReader(request.Body).ReadToEndAsync();
             if (StartRequested is not null)
             {
-                var handlers = StartRequested.GetInvocationList().Cast<Func<StartCommand, Task>>();
-                await Task.WhenAll(handlers.Select(h => h(cmd)));
+                var handlers = StartRequested.GetInvocationList().Cast<Func<string, Task>>();
+                await Task.WhenAll(handlers.Select(h => h(body)));
             }
             return Results.Ok(new { message = "started" });
         });
-        v1.MapPost("/end", async (EndCommand cmd) =>
+        v1.MapPost("/end", async (HttpRequest request) =>
         {
+            var body = await new StreamReader(request.Body).ReadToEndAsync();
             if (EndRequested is not null)
             {
-                var handlers = EndRequested.GetInvocationList().Cast<Func<EndCommand, Task>>();
-                await Task.WhenAll(handlers.Select(h => h(cmd)));
+                var handlers = EndRequested.GetInvocationList().Cast<Func<string, Task>>();
+                await Task.WhenAll(handlers.Select(h => h(body)));
             }
             return Results.Ok(new { message = "ended" });
         });

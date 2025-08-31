@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
-using MyWebApi;
 
 namespace MyAppMain.Tests;
 
@@ -13,8 +12,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
-        var tcs = new TaskCompletionSource<StartCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var app = new global::MyAppMain.MyAppMain(cmd => { tcs.TrySetResult(cmd); return Task.CompletedTask; }, _ => Task.CompletedTask);
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var app = new global::MyAppMain.MyAppMain(json => { tcs.TrySetResult(json); return Task.CompletedTask; }, _ => Task.CompletedTask);
         var port = GetFreeTcpPort();
 
         try
@@ -25,7 +24,7 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/start", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            Assert.AreEqual("hello", received.Message);
+            StringAssert.Contains(received, "\"hello\"");
         }
         finally
         {
@@ -36,8 +35,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
-        var tcs = new TaskCompletionSource<EndCommand>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var app = new global::MyAppMain.MyAppMain(_ => Task.CompletedTask, cmd => { tcs.TrySetResult(cmd); return Task.CompletedTask; });
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var app = new global::MyAppMain.MyAppMain(_ => Task.CompletedTask, json => { tcs.TrySetResult(json); return Task.CompletedTask; });
         var port = GetFreeTcpPort();
 
         try
@@ -48,7 +47,7 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/end", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            Assert.AreEqual("bye", received.Message);
+            StringAssert.Contains(received, "\"bye\"");
         }
         finally
         {

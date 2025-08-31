@@ -30,18 +30,17 @@ Wire your existing application logic by passing delegates to MyAppMain. The dele
 
 ```
 using MyAppMain;
-using MyWebApi; // for StartCommand/EndCommand DTOs
 
 // Example: integrate existing external logic (sync or async)
 var app = new MyAppMain.MyAppMain(
-    onStart: cmd => {
-        // ExternalLib.Start(cmd.Message);
-        Console.WriteLine($"Start: {cmd.Message}");
+    onStart: json => {
+        // ExternalLib.Start(json); // raw JSON string
+        Console.WriteLine($"Start JSON: {json}");
         return Task.CompletedTask;
     },
-    onEnd: cmd => {
-        // ExternalLib.End(cmd.Message);
-        Console.WriteLine($"End: {cmd.Message}");
+    onEnd: json => {
+        // ExternalLib.End(json);
+        Console.WriteLine($"End JSON: {json}");
         return Task.CompletedTask;
     }
 );
@@ -82,4 +81,3 @@ Both endpoints are implemented in the internal host and raise events that MyAppM
 
 **License**
 - Add your preferred license here if distributing.
-
