@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
+using IfUtilityLib;
 
 namespace MyAppMain.Tests;
 
@@ -13,7 +14,8 @@ public class MyAppMainBlackBoxTests
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var app = new global::MyAppMain.MyAppMain(json => { tcs.TrySetResult(json); return Task.CompletedTask; }, _ => Task.CompletedTask);
+        var util = new TestIfUtility(tcs, null);
+        var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
         try
@@ -36,7 +38,8 @@ public class MyAppMainBlackBoxTests
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var app = new global::MyAppMain.MyAppMain(_ => Task.CompletedTask, json => { tcs.TrySetResult(json); return Task.CompletedTask; });
+        var util = new TestIfUtility(null, tcs);
+        var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
         try
@@ -71,4 +74,16 @@ public class MyAppMainBlackBoxTests
         listener.Stop();
         return port;
     }
+}
+
+file static class TcsExtensions { public static async Task<T> TimeoutAfter<T>(this Task<T> task, TimeSpan timeout) { using var cts = new CancellationTokenSource(timeout); var completed = await Task.WhenAny(task, Task.Delay(Timeout.InfiniteTimeSpan, cts.Token)); if (completed == task) return await task; throw new TimeoutException(); } }
+
+class TestIfUtility : IfUtility
+{
+    private readonly TaskCompletionSource<string>? _startTcs;
+    private readonly TaskCompletionSource<string>? _endTcs;
+    public TestIfUtility(TaskCompletionSource<string>? startTcs, TaskCompletionSource<string>? endTcs)
+    { _startTcs = startTcs; _endTcs = endTcs; }
+    public override void HandleStart(string json) { _startTcs?.TrySetResult(json); }
+    public override void HandleEnd(string json) { _endTcs?.TrySetResult(json); }
 }

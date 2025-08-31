@@ -1,21 +1,20 @@
 using MyWebApi;
+using IfUtilityLib;
 
 namespace MyAppMain;
 
 public sealed class MyAppMain : IDisposable
 {
-    private readonly Func<string, Task> _onStart;
-    private readonly Func<string, Task> _onEnd;
     private readonly MyWebApiHost _host = new();
+    private readonly IfUtility _utility;
     private bool _disposed;
 
-    public MyAppMain(Func<string, Task> onStart, Func<string, Task> onEnd)
+    public MyAppMain(IfUtility? utility = null)
     {
-        _onStart = onStart ?? (_ => Task.CompletedTask);
-        _onEnd = onEnd ?? (_ => Task.CompletedTask);
+        _utility = utility ?? new IfUtility();
         // Subscribe at construction time to avoid missing early POSTs right after Start.
-        _host.StartRequested += _onStart;
-        _host.EndRequested += _onEnd;
+        _host.StartRequested += OnStartMessageReceived;
+        _host.EndRequested += OnEndMessageReceived;
     }
 
     public bool IsRunning => _host.IsRunning;
@@ -24,11 +23,16 @@ public sealed class MyAppMain : IDisposable
 
     public void Stop() => _host.Stop();
 
+    // Event handlers wired to MyWebApiHost events
+    public void OnStartMessageReceived(string json) => _utility.HandleStart(json);
+
+    public void OnEndMessageReceived(string json) => _utility.HandleEnd(json);
+
     public void Dispose()
     {
         if (_disposed) return;
-        _host.StartRequested -= _onStart;
-        _host.EndRequested -= _onEnd;
+        _host.StartRequested -= OnStartMessageReceived;
+        _host.EndRequested -= OnEndMessageReceived;
         _disposed = true;
     }
 }

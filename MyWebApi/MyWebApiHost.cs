@@ -15,8 +15,9 @@ public sealed class MyWebApiHost : IAsyncDisposable
     public bool IsRunning => _app is not null;
 
     // Events raised when /v1/start and /v1/end are posted (raw JSON/body string)
-    public event Func<string, Task>? StartRequested;
-    public event Func<string, Task>? EndRequested;
+    // Keep Action<string> for handlers; we will invoke them concurrently and await completion.
+    public event Action<string>? StartRequested;
+    public event Action<string>? EndRequested;
 
     // Sync wrappers as requested (Start/Stop)
     public bool Start(int port, CancellationToken cancellationToken = default)
@@ -54,8 +55,9 @@ public sealed class MyWebApiHost : IAsyncDisposable
                 var body = await new StreamReader(request.Body).ReadToEndAsync();
                 if (StartRequested is not null)
                 {
-                    var handlers = StartRequested.GetInvocationList().Cast<Func<string, Task>>();
-                    await Task.WhenAll(handlers.Select(h => h(body)));
+                    var handlers = StartRequested.GetInvocationList().Cast<Action<string>>();
+                    var tasks = handlers.Select(h => Task.Run(() => h(body)));
+                    await Task.WhenAll(tasks);
                 }
                 return Results.Ok(new { message = "started" });
             });
@@ -64,8 +66,9 @@ public sealed class MyWebApiHost : IAsyncDisposable
                 var body = await new StreamReader(request.Body).ReadToEndAsync();
                 if (EndRequested is not null)
                 {
-                    var handlers = EndRequested.GetInvocationList().Cast<Func<string, Task>>();
-                    await Task.WhenAll(handlers.Select(h => h(body)));
+                    var handlers = EndRequested.GetInvocationList().Cast<Action<string>>();
+                    var tasks = handlers.Select(h => Task.Run(() => h(body)));
+                    await Task.WhenAll(tasks);
                 }
                 return Results.Ok(new { message = "ended" });
             });

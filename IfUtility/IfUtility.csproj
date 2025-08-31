@@ -4,8 +4,5 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../MyWebApi/MyWebApi.csproj" />
-    <ProjectReference Include="../IfUtility/IfUtility.csproj" />
-  </ItemGroup>
 </Project>
+

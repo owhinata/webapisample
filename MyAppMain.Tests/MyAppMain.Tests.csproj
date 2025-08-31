@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MyAppMain\MyAppMain.csproj" />
+    <ProjectReference Include="..\IfUtility\IfUtility.csproj" />
   </ItemGroup>
 
 </Project>
