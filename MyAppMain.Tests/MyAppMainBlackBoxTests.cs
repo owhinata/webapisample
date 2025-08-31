@@ -25,7 +25,7 @@ public class MyAppMainBlackBoxTests
             var body = "{\"message\":\"hello\"}";
             var content = new StringContent(body, Encoding.UTF8, "application/json");
             var res = await client.PostAsync("/v1/start", content);
-            Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
+            Assert.AreEqual(HttpStatusCode.Created, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
             Assert.AreEqual(body, received, "IfUtility.HandleStart argument mismatch");
             Assert.AreEqual(1, util.StartCallCount, "HandleStart should be called once");
@@ -55,7 +55,7 @@ public class MyAppMainBlackBoxTests
             await Task.WhenAll(t1, t2);
 
             var codes = new[] { t1.Result.StatusCode, t2.Result.StatusCode };
-            Assert.IsTrue(codes.Contains(HttpStatusCode.OK), "One request should succeed");
+            Assert.IsTrue(codes.Contains(HttpStatusCode.Created), "One request should succeed");
             Assert.IsTrue(codes.Contains((HttpStatusCode)429), "One request should be rejected with 429");
         }
         finally
@@ -79,7 +79,7 @@ public class MyAppMainBlackBoxTests
             var body = "{\"message\":\"bye\"}";
             var content = new StringContent(body, Encoding.UTF8, "application/json");
             var res = await client.PostAsync("/v1/end", content);
-            Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
+            Assert.AreEqual(HttpStatusCode.Created, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
             Assert.AreEqual(body, received, "IfUtility.HandleEnd argument mismatch");
             Assert.AreEqual(1, util.EndCallCount, "HandleEnd should be called once");

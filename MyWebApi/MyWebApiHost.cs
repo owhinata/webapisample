@@ -76,7 +76,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
                     var tasks = handlers.Select(h => Task.Run(() => h(body)));
                     await Task.WhenAll(tasks);
                 }
-                return Results.Ok(new { message = "started" });
+                return Results.Created("/v1/start", new { message = "started" });
             });
             v1.MapPost("/end", async (HttpRequest request) =>
             {
@@ -87,7 +87,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
                     var tasks = handlers.Select(h => Task.Run(() => h(body)));
                     await Task.WhenAll(tasks);
                 }
-                return Results.Ok(new { message = "ended" });
+                return Results.Created("/v1/end", new { message = "ended" });
             });
 
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
