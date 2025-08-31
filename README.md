@@ -1,114 +1,85 @@
-# MyWebApi — Self‑Hosted Minimal Web API Library
+# MyAppMain — Orchestrator Library for Self‑Hosted Web API
 
-A minimal .NET 8 class library that self‑hosts an ASP.NET Core Web API. It exposes POST‑only sample endpoints and provides simple `Start`/`Stop` control from your code. TCP server functionality is independent and not required by this library.
+MyAppMain is a .NET 8 orchestrator library that starts/stops an embedded Web API and forwards POST payloads to your application logic via delegates. Consumers should use MyAppMain directly; the underlying MyWebApi host is an internal detail.
 
 **Key Features**
-- Self‑hosts Kestrel within your process.
-- Simple lifecycle: `Start(port)` and `Stop()`.
-- POST endpoints: `/start`, `/end` returning JSON.
-- Targets `net8.0` and references `Microsoft.AspNetCore.App`.
-
-For the full system architecture (MyWebApi, MyAppMain, ExternalLib) and testing approach, see `docs/DESIGN.md`.
+- Simple lifecycle: `Start(port)` and `Stop()`; no ASP.NET Core dependency in your code.
+- Delegate-based integration: wire existing ExternalLib methods without adding interfaces.
+- Versioned endpoints exposed by the host: `/v1/start`, `/v1/end` (POST only).
+- Targets `net8.0`.
 
 **Project Layout**
-- `MyWebApi/` — Library project
-  - `MyWebApi.csproj` — `net8.0` with `Microsoft.AspNetCore.App` framework reference
-  - `MyWebApiHost.cs` — Host with `Start`/`Stop` and POST endpoints
+- `MyAppMain/` — Orchestrator library (public entry)
+  - `MyAppMain.csproj`, `MyAppMain.cs`
+- `MyWebApi/` — Embedded host (internal dependency)
+  - `MyWebApiHost.cs`, `Commands.cs` (DTOs `StartCommand`, `EndCommand`)
+- `MyAppMain.Tests/` — MSTest black‑box tests for MyAppMain
 
 **Requirements**
 - .NET 8 SDK installed (`dotnet --version` shows 8.x)
 - ASP.NET Core shared framework available (`dotnet --list-runtimes` shows `Microsoft.AspNetCore.App 8.x`)
 
-If running on a machine without the ASP.NET Core runtime, either install it (e.g., `aspnetcore-runtime-8.0`) or publish self‑contained from your app.
+If the target machine lacks ASP.NET Core runtime, publish your app self‑contained.
 
 **Build**
-- Build the library:
-  - `dotnet build MyWebApi/MyWebApi.csproj -c Release`
-- Artifacts:
-  - `MyWebApi/bin/Release/net8.0/MyWebApi.dll`
+- Build all: `dotnet build -c Release`
+- Or build only MyAppMain: `dotnet build MyAppMain/MyAppMain.csproj -c Release`
 
-**Quick Start (From Your App)**
-Use the host class to start and stop the embedded HTTP server.
+**Quick Start**
+Wire your existing application logic by passing delegates to MyAppMain. The delegates receive DTOs deserialized from the HTTP POST body.
 
 ```
-using MyWebApi;
+using MyAppMain;
+using MyWebApi; // for StartCommand/EndCommand DTOs
 
-var host = new MyWebApiHost();
+// Example: integrate existing external logic (sync or async)
+var app = new MyAppMain.MyAppMain(
+    onStart: cmd => {
+        // ExternalLib.Start(cmd.Message);
+        Console.WriteLine($"Start: {cmd.Message}");
+        return Task.CompletedTask;
+    },
+    onEnd: cmd => {
+        // ExternalLib.End(cmd.Message);
+        Console.WriteLine($"End: {cmd.Message}");
+        return Task.CompletedTask;
+    }
+);
 
-// Start on port 5008 (binds http://0.0.0.0:5008)
-host.Start(5008);
-
-// ... your app logic ...
-
-// Stop when finished
-host.Stop();
-// Or: await host.DisposeAsync();
+app.Start(5008); // listens on http://0.0.0.0:5008
+// ... run your process ...
+app.Stop();
 ```
 
 Test the endpoints while running:
-- `curl -X POST http://localhost:5008/v1/start` → `{ "message": "started" }`
-- `curl -X POST http://localhost:5008/v1/end` → `{ "message": "ended" }`
-
-**Run A Minimal Console Host (optional)**
-Create a tiny console app to try it out locally.
-
-```
-// Program.cs
-using MyWebApi;
-
-var host = new MyWebApiHost();
-host.Start(5008);
-Console.WriteLine("MyWebApi listening on http://localhost:5008 (POST /start, /end). Press Ctrl+C to stop.");
-
-Console.CancelKeyPress += async (_, e) =>
-{
-    e.Cancel = true;
-    await host.DisposeAsync();
-};
-
-await Task.Delay(Timeout.InfiniteTimeSpan);
-```
+- `curl -X POST http://localhost:5008/v1/start -H "Content-Type: application/json" -d '{"message":"hello"}'`
+- `curl -X POST http://localhost:5008/v1/end   -H "Content-Type: application/json" -d '{"message":"bye"}'`
 
 **Endpoints**
-- POST `/v1/start`: Returns `200 OK` with `{ message: "started" }`.
-- POST `/v1/end`: Returns `200 OK` with `{ message: "ended" }`.
+- POST `/v1/start`: `{ message: "started" }` on success, also invokes your `onStart` delegate with `StartCommand`.
+- POST `/v1/end`: `{ message: "ended" }` on success, also invokes your `onEnd` delegate with `EndCommand`.
 
-Both endpoints are mapped via minimal APIs inside `MyWebApiHost` and are intentionally stateless for the sample. Extend the handlers as needed.
+Both endpoints are implemented in the internal host and raise events that MyAppMain subscribes to; your delegates are awaited.
 
 **Behavior & Notes**
-- The host adds `http://0.0.0.0:{port}` to `app.Urls` so it listens on all interfaces.
-- `Start` throws if already started; call `Stop`/`DisposeAsync` before starting again.
-- `Stop` cancels the internal run loop and disposes the host.
-- `MyWebApiHost` implements `IAsyncDisposable` for graceful shutdown.
+- `Start` throws if already started. Call `Stop` before starting again.
+- The host binds `http://0.0.0.0:{port}` and is HTTP by default (enable HTTPS if needed).
+- Delegates may be async; return `Task.CompletedTask` for sync logic.
 
 **Testing (MSTest, black‑box)**
-- Create MSTest project: `dotnet new mstest -n MyWebApi.Tests`
-- Add reference: `dotnet add MyWebApi.Tests/MyWebApi.Tests.csproj reference MyWebApi/MyWebApi.csproj`
-- Example test file: `MyWebApi.Tests/MyWebApiHostBlackBoxTests.cs` (already included here) spins up the host on a free port and `POST`s `/start` and `/end`.
-- Run tests: `dotnet test -c Release`
+- Run tests: `dotnet test MyAppMain.Tests -c Release`
+- Tests start MyAppMain on a free port, POST payloads, and assert delegate invocation.
+
+**Design Document**
+- See `docs/DESIGN.md` for architecture, contracts, and testing strategy.
 
 **Troubleshooting**
-- Error: `The framework 'Microsoft.AspNetCore.App' was not found`:
-  - Install ASP.NET Core runtime or publish self‑contained.
-- Error: Port already in use:
-  - Choose another port in `Start(port)`.
-- Build errors about missing `WebApplication`/`Results`:
-  - Ensure `MyWebApi.csproj` has `<FrameworkReference Include="Microsoft.AspNetCore.App" />` and target `net8.0`.
-
-**Publish (optional)**
-- Framework‑dependent (requires ASP.NET Core runtime on target):
-  - `dotnet publish MyWebApi/MyWebApi.csproj -c Release`
-- Self‑contained single file (no preinstalled runtime):
-  - `dotnet publish YourApp.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true`
-  - Replace `YourApp.csproj` with the app that references `MyWebApi`.
+- The framework 'Microsoft.AspNetCore.App' was not found: install ASP.NET Core runtime or publish self‑contained.
+- Port already in use: choose another port in `Start(port)`.
 
 **Security**
-- Sample endpoints are unauthenticated and HTTP only for simplicity.
-- For production use, enable HTTPS, add authentication/authorization, and validate inputs.
-
-**Extending**
-- Add more POST endpoints in `MyWebApiHost` using `app.MapPost("/path", handler)`.
-- Inject services by registering them on `builder.Services` before `builder.Build()` if you expand the design.
+- Samples are unauthenticated and HTTP only; for production, enable HTTPS and add authN/Z.
 
 **License**
 - Add your preferred license here if distributing.
+
