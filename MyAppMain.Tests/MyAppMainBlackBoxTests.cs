@@ -37,6 +37,34 @@ public class MyAppMainBlackBoxTests
     }
 
     [TestMethod]
+    public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
+    {
+        var util = new TestIfUtility(null, null);
+        var app = new global::MyAppMain.MyAppMain(util);
+        var port = GetFreeTcpPort();
+
+        try
+        {
+            app.Start(port);
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            var body1 = "{\"message\":\"r1\"}";
+            var body2 = "{\"message\":\"r2\"}";
+            var t1 = client.PostAsync("/v1/start", new StringContent(body1, Encoding.UTF8, "application/json"));
+            var t2 = client.PostAsync("/v1/start", new StringContent(body2, Encoding.UTF8, "application/json"));
+
+            await Task.WhenAll(t1, t2);
+
+            var codes = new[] { t1.Result.StatusCode, t2.Result.StatusCode };
+            Assert.IsTrue(codes.Contains(HttpStatusCode.OK), "One request should succeed");
+            Assert.IsTrue(codes.Contains((HttpStatusCode)429), "One request should be rejected with 429");
+        }
+        finally
+        {
+            app.Stop();
+        }
+    }
+
+    [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
