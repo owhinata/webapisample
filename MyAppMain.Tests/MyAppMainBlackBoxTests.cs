@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
 using IfUtilityLib;
@@ -106,6 +107,55 @@ public class MyAppMainBlackBoxTests
         listener.Stop();
         return port;
     }
+
+    [TestMethod]
+    public async Task Start_Message_With_Server_Info_Connects_To_TCP_Server()
+    {
+        // Start test TCP server
+        using var testServer = new TestTcpServer();
+        var serverPort = testServer.Start();
+        
+        // Create test utility that will capture the connection
+        var connectionTcs = new TaskCompletionSource<TcpClient>();
+        var util = new TestIfUtilityWithTcpClient(connectionTcs);
+        var app = new global::MyAppMain.MyAppMain(util);
+        var apiPort = GetFreeTcpPort();
+
+        try
+        {
+            app.Start(apiPort);
+            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{apiPort}") };
+            
+            // Send server info in JSON
+            var serverInfo = new { 
+                address = "127.0.0.1", 
+                port = serverPort 
+            };
+            var json = JsonSerializer.Serialize(serverInfo);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            
+            var res = await client.PostAsync("/v1/start", content);
+            Assert.AreEqual(HttpStatusCode.Created, res.StatusCode);
+            
+            // Wait for TCP connection
+            var acceptTask = testServer.AcceptConnectionAsync();
+            var tcpClient = await WaitAsync(connectionTcs.Task, TimeSpan.FromSeconds(3));
+            Assert.IsNotNull(tcpClient, "TCP client should be created");
+            Assert.IsTrue(tcpClient.Connected, "TCP client should be connected");
+            
+            // Verify server received connection
+            var serverClient = await WaitAsync(acceptTask, TimeSpan.FromSeconds(3));
+            Assert.IsNotNull(serverClient, "Server should receive connection");
+            
+            // Cleanup
+            tcpClient.Close();
+            serverClient.Close();
+        }
+        finally
+        {
+            app.Stop();
+        }
+    }
 }
 
 
@@ -131,5 +181,69 @@ class TestIfUtility : IfUtility
         EndCallCount++;
         LastEndArg = json;
         _endTcs?.TrySetResult(json);
+    }
+}
+
+class TestIfUtilityWithTcpClient : IfUtility
+{
+    private readonly TaskCompletionSource<TcpClient> _connectionTcs;
+    
+    public TestIfUtilityWithTcpClient(TaskCompletionSource<TcpClient> connectionTcs)
+    {
+        _connectionTcs = connectionTcs;
+    }
+    
+    public override async void HandleStart(string json)
+    {
+        try
+        {
+            var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            
+            if (root.TryGetProperty("address", out var addressProp) && 
+                root.TryGetProperty("port", out var portProp))
+            {
+                var address = addressProp.GetString();
+                var port = portProp.GetInt32();
+                
+                var tcpClient = new TcpClient();
+                await tcpClient.ConnectAsync(address!, port);
+                _connectionTcs.TrySetResult(tcpClient);
+            }
+        }
+        catch (Exception ex)
+        {
+            _connectionTcs.TrySetException(ex);
+        }
+    }
+}
+
+class TestTcpServer : IDisposable
+{
+    private TcpListener? _listener;
+    private readonly List<TcpClient> _clients = new();
+    
+    public int Start()
+    {
+        _listener = new TcpListener(IPAddress.Loopback, 0);
+        _listener.Start();
+        return ((IPEndPoint)_listener.LocalEndpoint).Port;
+    }
+    
+    public async Task<TcpClient> AcceptConnectionAsync()
+    {
+        if (_listener == null) throw new InvalidOperationException("Server not started");
+        var client = await _listener.AcceptTcpClientAsync();
+        _clients.Add(client);
+        return client;
+    }
+    
+    public void Dispose()
+    {
+        foreach (var client in _clients)
+        {
+            try { client.Close(); } catch { }
+        }
+        _listener?.Stop();
     }
 }
