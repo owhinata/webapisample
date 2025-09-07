@@ -1,18 +1,22 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Root: `Program.cs` (minimal API endpoints), `MyWebApi.csproj`, `appsettings*.json`, `Properties/launc
-hSettings.json`, `MyWebApi.http`.
-- Add controllers (if used) under `Controllers/`; shared services under `Services/`; data/EF code under
- `Data/`.
-- Swagger/OpenAPI is enabled in Development; browse `https://localhost:7061/swagger` (ports from `launc
-hSettings.json`).
+- Root: Contains three main projects:
+  - `MyWebApi/`: Self-hosted Web API with rate limiting (`MyWebApiHost.cs`)
+  - `MyAppMain/`: Main application entry point
+  - `IfUtility/`: Shared utility library
+- MyWebApi features:
+  - Event-based integration via `StartRequested`/`EndRequested` events
+  - Versioned endpoints under `/v1` route group (`/v1/start`, `/v1/end`)
+  - Global rate limiting (1 concurrent request, no queueing)
+  - Returns 201 Created on success, 429 Too Many Requests when rate limited
+- Add controllers (if used) under `Controllers/`; shared services under `Services/`; data/EF code under `Data/`.
 
 ## Build, Test, and Development Commands
 - Restore/build: `dotnet restore` / `dotnet build` — restore packages and compile.
-- Run (HTTPS): `dotnet run --launch-profile https` — starts the API with Swagger.
+- Run individual projects: `dotnet run --project MyWebApi` or `dotnet run --project MyAppMain`.
 - Hot reload: `dotnet watch run` — rebuilds on file changes.
-- Unit tests: `dotnet test` — runs tests when a test project exists.
+- Unit tests: `dotnet test` — runs all test projects in the solution.
 
 ## Documentation
 - High-level architecture and integration notes live in `docs/DESIGN.md`.
@@ -24,11 +28,12 @@ hSettings.json`).
 - APIs: prefer minimal APIs/route groups; keep routes kebab-case (e.g., `/weather-forecasts`).
 
 ## Testing Guidelines
-- Framework: MSTest v2 in `MyWebApi.Tests` (net8.0).
+- Framework: MSTest v2 in `MyAppMain.Tests` (net8.0).
 - Style: Black-box tests that start `MyWebApiHost` on a free port and call endpoints with `HttpClient`.
-- Create project: `dotnet new mstest -n MyWebApi.Tests` then `dotnet add MyWebApi.Tests/MyWebApi.Tests.csproj reference MyWebApi/MyWebApi.csproj`.
-- Run tests: `dotnet test MyWebApi.Tests -c Release` (or `--no-build` after a successful build).
-- List/filter tests: `dotnet test MyWebApi.Tests --list-tests` / `dotnet test MyWebApi.Tests --filter "FullyQualifiedName~MyWebApiHostBlackBoxTests"`.
+- Test projects: `MyAppMain.Tests` for testing the main application and API integration.
+- Create project: `dotnet new mstest -n MyAppMain.Tests` then add references as needed.
+- Run tests: `dotnet test MyAppMain.Tests -c Release` (or `--no-build` after a successful build).
+- List/filter tests: `dotnet test MyAppMain.Tests --list-tests` / `dotnet test MyAppMain.Tests --filter "FullyQualifiedName~MyAppMainBlackBoxTests"`.
 - Ports: Allocate a free port per test (e.g., bind `TcpListener` to port 0) to avoid conflicts in parallel runs.
 - Optional in-proc testing: If needed, use `Microsoft.AspNetCore.TestHost` and refactor host wiring to allow in-memory testing without opening sockets.
 
@@ -44,8 +49,6 @@ hSettings.json`).
 - Checks: PRs should build cleanly and keep public API changes documented in Swagger.
 
 ## Security & Configuration Tips
-- Local HTTPS: if browsers warn, trust the dev cert: `dotnet dev-certs https --trust` (Ubuntu may need 
-`libnss3-tools`).
-- Config: prefer `appsettings.Development.json` and environment variables; never commit secrets — use `
-dotnet user-secrets` in Development.
+- Local HTTPS: if browsers warn, trust the dev cert: `dotnet dev-certs https --trust` (Ubuntu may need `libnss3-tools`).
+- Config: prefer `appsettings.Development.json` and environment variables; never commit secrets — use `dotnet user-secrets` in Development.
 - CORS/HTTPS: keep `app.UseHttpsRedirection()` in place; configure CORS explicitly per environment.
