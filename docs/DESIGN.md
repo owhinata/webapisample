@@ -9,6 +9,8 @@
 - `MyWebApi` (existing)
   - Self‑hosts Kestrel, exposes versioned endpoints `/v1/start` and `/v1/end`.
   - Raises events with raw POST body strings.
+  - Implements global rate limiting (1 concurrent request, no queueing).
+  - Returns 201 Created on success, 429 Too Many Requests when rate limited.
 - `MyAppMain` (new)
   - Orchestrator that wraps `MyWebApiHost` with `Start(int port)` / `Stop()`.
   - Subscribes to `MyWebApi` events and invokes application logic delegates wired to `ExternalLib`.
@@ -19,13 +21,14 @@
 To avoid coupling to MyWebApi types, events and delegates use raw JSON strings.
 
 ```csharp
-// Events exposed by MyWebApiHost (async delegates for flexibility)
-public event Func<string, Task>? StartRequested; // raw body
-public event Func<string, Task>? EndRequested;   // raw body
+// Events exposed by MyWebApiHost (synchronous for simplicity)
+public event Action<string>? StartRequested; // raw body
+public event Action<string>? EndRequested;   // raw body
 ```
 
 Notes:
-- Use `Func<string, Task>` for async compatibility. If handlers are sync, return `Task.CompletedTask`.
+- Events use `Action<string>` for synchronous handling.
+- For async operations in handlers, consider using Task.Run or async void patterns if needed.
 
 ## Data Flow
 1. Client sends `POST /v1/start` or `/v1/end` with JSON body `{ "message": "..." }`.
@@ -39,8 +42,8 @@ Notes:
   - `Stop()`: Stops `MyWebApiHost` and unsubscribes handlers.
 - Integration points:
   - Accepts two delegates in constructor:
-    - `Func<string, Task> onStart`
-    - `Func<string, Task> onEnd`
+    - `Action<string> onStart`
+    - `Action<string> onEnd`
   - These delegates typically wrap existing `ExternalLib` methods.
 
 Example wiring (no changes to ExternalLib required):
@@ -49,8 +52,8 @@ Example wiring (no changes to ExternalLib required):
 // ExternalLib usage examples
 var external = new ExternalLib.Service();
 var app = new MyAppMain(
-    onStart: json => external.HandleStartAsync(json),
-    onEnd:   json => external.HandleEndAsync(json)
+    onStart: json => external.HandleStart(json),
+    onEnd:   json => external.HandleEnd(json)
 );
 
 app.Start(5008);
@@ -80,14 +83,14 @@ Example test sketch:
 public async Task Posting_Start_Triggers_External_Handler()
 {
     var startTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var app = new MyAppMain(json => { startTcs.SetResult(json); return Task.CompletedTask; }, _ => Task.CompletedTask);
+    var app = new MyAppMain(json => startTcs.SetResult(json), _ => { });
     var port = GetFreePort();
     try
     {
         app.Start(port);
         var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
         var res = await client.PostAsync("/v1/start", new StringContent("{\"message\":\"hello\"}", Encoding.UTF8, "application/json"));
-        Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
+        Assert.AreEqual(HttpStatusCode.Created, res.StatusCode);
         var received = await startTcs.Task.TimeoutAfter(TimeSpan.FromSeconds(3));
         StringAssert.Contains(received, "\"hello\"");
     }
@@ -96,9 +99,10 @@ public async Task Posting_Start_Triggers_External_Handler()
 ```
 
 ## Concurrency & Error Handling
-- Multiple subscribers: If multiple handlers are attached, `await Task.WhenAll(invocations)` ensures all complete.
-- Handler failures: Decide policy (fail fast vs. log and continue). Default recommendation: catch, log, and return 200 to the client unless failures must be surfaced.
-- Timeouts: Consider wrapping delegate invocation with a timeout in `MyAppMain` if required by business needs.
+- Rate limiting: Global rate limiter allows only 1 concurrent request (no queueing). Returns 429 Too Many Requests when limit exceeded.
+- Multiple subscribers: If multiple handlers are attached, all are invoked synchronously in order.
+- Handler failures: Decide policy (fail fast vs. log and continue). Default recommendation: catch, log, and return 201 Created to the client unless failures must be surfaced.
+- Timeouts: Consider implementing timeout logic within handlers if required by business needs.
 
 ## Security Considerations
 - Sample endpoints are unauthenticated; add auth (API keys, JWT) if exposed beyond trusted networks.
