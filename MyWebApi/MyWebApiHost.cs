@@ -113,7 +113,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
 
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Best-effort cleanup on failure
             await CleanupResourcesAsync(app, linkedCts);
@@ -148,7 +148,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
             await app.StopAsync(cancellationToken);
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return false;
         }
