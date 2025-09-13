@@ -1,115 +1,126 @@
-# Design: MyWebApi + MyAppMain + ExternalLib
+# 設計: MyWebApi + MyAppMain + IfUtility
 
-## Goals
-- Add two libraries around existing `MyWebApi` to execute application logic on POST requests.
-- Avoid coupling `MyAppMain` to ASP.NET Core/DI; use events from `MyWebApi` instead.
-- Keep external library unchanged (no new interfaces); integrate via delegates from `MyAppMain`.
+## 目標
+- 既存の`MyWebApi`を中心としたライブラリ群でPOSTリクエストに対するアプリケーションロジックを実行する
+- `MyAppMain`をASP.NET Core/DIに結合させず、代わりに`MyWebApi`のイベントを使用する
+- 外部ライブラリは変更せず（新しいインターフェースなし）、`MyAppMain`からのデリゲートで統合する
 
-## Components
-- `MyWebApi` (existing)
-  - Self‑hosts Kestrel, exposes versioned endpoints `/v1/start` and `/v1/end`.
-  - Raises events with raw POST body strings.
-  - Implements global rate limiting (1 concurrent request, no queueing).
-  - Returns 201 Created on success, 429 Too Many Requests when rate limited.
-- `MyAppMain` (new)
-  - Orchestrator that wraps `MyWebApiHost` with `Start(int port)` / `Stop()`.
-  - Subscribes to `MyWebApi` events and invokes application logic delegates wired to `ExternalLib`.
-- `ExternalLib` (existing)
-  - Contains real application logic methods (sync/async, static/instance). No changes required.
+## コンポーネント
+- `MyWebApi` (既存)
+  - Kestrelを自己ホストし、バージョン付きエンドポイント`/v1/start`と`/v1/end`を公開
+  - 生のPOSTボディ文字列でイベントを発生させる
+  - グローバルレート制限を実装（1同時リクエスト、キューなし）
+  - 成功時は201 Created、レート制限時は429 Too Many Requestsを返す
+- `MyAppMain` (新規)
+  - `MyWebApiHost`を`Start(int port)`/`Stop()`でラップするオーケストレーター
+  - `MyWebApi`イベントに購読し、TCP接続ロジックとIfUtilityメソッドを呼び出す
+  - 直接TCP接続を管理し、JSONペイロードからサーバー情報を抽出する
+- `IfUtility` (既存)
+  - 現在は空の実装（将来の拡張用）
+  - テスト用のサブクラス化をサポートする仮想メソッドを提供
 
-## Public Contracts
-To avoid coupling to MyWebApi types, events and delegates use raw JSON strings.
+## パブリック契約
+MyWebApiの型との結合を避けるため、イベントとデリゲートは生のJSON文字列を使用する。
 
 ```csharp
-// Events exposed by MyWebApiHost (synchronous for simplicity)
-public event Action<string>? StartRequested; // raw body
-public event Action<string>? EndRequested;   // raw body
+// MyWebApiHostが公開するイベント（シンプルさのため同期）
+public event Action<string>? StartRequested; // 生のボディ
+public event Action<string>? EndRequested;   // 生のボディ
 ```
 
-Notes:
-- Events use `Action<string>` for synchronous handling.
-- For async operations in handlers, consider using Task.Run or async void patterns if needed.
+注意事項:
+- イベントは同期処理のために`Action<string>`を使用する
+- ハンドラー内での非同期操作が必要な場合は、Task.Runやasync voidパターンを検討する
+- イベントハンドラーは非同期で並行実行される（Task.Runでラップ）
 
-## Data Flow
-1. Client sends `POST /v1/start` or `/v1/end` with JSON body `{ "message": "..." }`.
-2. Minimal API reads the body as a string.
-3. `MyWebApiHost` raises `StartRequested`/`EndRequested` with the raw JSON string.
-4. `MyAppMain` subscribed handlers are invoked; they call into `ExternalLib` via delegates.
+## データフロー
+1. クライアントがJSONボディ`{ "address": "localhost", "port": 8080 }`で`POST /v1/start`または`/v1/end`を送信
+2. Minimal APIがボディを文字列として読み取る
+3. `MyWebApiHost`が生のJSON文字列で`StartRequested`/`EndRequested`を発生させる
+4. `MyAppMain`の購読済みハンドラーが呼び出される：
+   - まず`IfUtility.HandleStart`/`HandleEnd`を呼び出し
+   - JSONからアドレスとポートを抽出してTCP接続を確立/切断
 
-## MyAppMain Responsibilities
-- Lifecycle:
-  - `Start(int port)`: Subscribes to events, starts `MyWebApiHost` on the given port.
-  - `Stop()`: Stops `MyWebApiHost` and unsubscribes handlers.
-- Integration points:
-  - Accepts two delegates in constructor:
-    - `Action<string> onStart`
-    - `Action<string> onEnd`
-  - These delegates typically wrap existing `ExternalLib` methods.
+## MyAppMainの責任
+- ライフサイクル管理:
+  - `Start(int port)`: イベントに購読し、指定されたポートで`MyWebApiHost`を開始
+  - `Stop()`: `MyWebApiHost`を停止し、ハンドラーの購読を解除
+- 統合ポイント:
+  - コンストラクターで`IfUtility`インスタンスを受け取る（デフォルトで新規作成）
+  - イベントハンドラー内でTCP接続ロジックを直接実装
+  - JSONペイロードからサーバー情報を抽出してTCP接続を管理
 
-Example wiring (no changes to ExternalLib required):
+使用例:
 
 ```csharp
-// ExternalLib usage examples
-var external = new ExternalLib.Service();
-var app = new MyAppMain(
-    onStart: json => external.HandleStart(json),
-    onEnd:   json => external.HandleEnd(json)
-);
-
+// デフォルトのIfUtilityを使用
+var app = new MyAppMain();
 app.Start(5008);
-// ...
+
+// またはカスタムのIfUtilityを注入
+var customUtility = new TestIfUtility();
+var app2 = new MyAppMain(customUtility);
+app2.Start(5008);
+
+// 停止
 app.Stop();
 ```
 
-## Dependency Boundaries
-- `MyAppMain` does not reference ASP.NET Core abstractions (no `IServiceCollection`, `WebApplication`, etc.).
-- Coordination happens via events and plain DTOs only.
-- `ExternalLib` remains unchanged; it is called through delegates passed into `MyAppMain`.
+## 依存関係の境界
+- `MyAppMain`はASP.NET Coreの抽象化を参照しない（`IServiceCollection`、`WebApplication`などなし）
+- 調整はイベントとプレーンDTOのみで行われる
+- `IfUtility`は変更されない；`MyAppMain`に注入されたインスタンスを通じて呼び出される
+- TCP接続ロジックは`MyAppMain`内に直接実装されている
 
-## Versioning
-- Endpoints are grouped under `/v1` to enable future breaking changes under `/v2` while keeping `/v1` stable.
+## バージョニング
+- エンドポイントは`/v1`でグループ化され、`/v2`での将来の破壊的変更を可能にしつつ`/v1`を安定に保つ
 
-## Testing Strategy (Black‑Box)
-- Test project `MyAppMain.Tests` uses MSTest.
-- Start `MyAppMain` on a free port.
-- Inject fake delegates that complete `TaskCompletionSource<string>` when invoked.
-- Use `HttpClient` to POST to `/v1/start` and `/v1/end` and assert that fakes were called and contain expected JSON.
-- Use a helper to allocate a free port by binding `TcpListener` to port 0.
+## テスト戦略（ブラックボックス）
+- テストプロジェクト`MyAppMain.Tests`はMSTestを使用
+- `MyAppMain`を空いているポートで開始
+- 呼び出されたときに`TaskCompletionSource<string>`を完了するフェイクのIfUtilityを注入
+- `HttpClient`を使用して`/v1/start`と`/v1/end`にPOSTし、フェイクが呼び出され期待されるJSONを含むことをアサート
+- `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
-Example test sketch:
+テスト例:
 
 ```csharp
 [TestMethod]
 public async Task Posting_Start_Triggers_External_Handler()
 {
     var startTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var app = new MyAppMain(json => startTcs.SetResult(json), _ => { });
+    var testUtility = new TestIfUtility { OnStart = json => startTcs.SetResult(json) };
+    var app = new MyAppMain(testUtility);
     var port = GetFreePort();
     try
     {
         app.Start(port);
         var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
-        var res = await client.PostAsync("/v1/start", new StringContent("{\"message\":\"hello\"}", Encoding.UTF8, "application/json"));
+        var json = "{\"address\":\"localhost\",\"port\":8080}";
+        var res = await client.PostAsync("/v1/start", new StringContent(json, Encoding.UTF8, "application/json"));
         Assert.AreEqual(HttpStatusCode.Created, res.StatusCode);
         var received = await startTcs.Task.TimeoutAfter(TimeSpan.FromSeconds(3));
-        StringAssert.Contains(received, "\"hello\"");
+        StringAssert.Contains(received, "\"localhost\"");
     }
     finally { app.Stop(); }
 }
 ```
 
-## Concurrency & Error Handling
-- Rate limiting: Global rate limiter allows only 1 concurrent request (no queueing). Returns 429 Too Many Requests when limit exceeded.
-- Multiple subscribers: If multiple handlers are attached, all are invoked synchronously in order.
-- Handler failures: Decide policy (fail fast vs. log and continue). Default recommendation: catch, log, and return 201 Created to the client unless failures must be surfaced.
-- Timeouts: Consider implementing timeout logic within handlers if required by business needs.
+## 並行性とエラーハンドリング
+- レート制限: グローバルレート制限により1同時リクエストのみ許可（キューなし）。制限超過時は429 Too Many Requestsを返す
+- 複数購読者: 複数のハンドラーがアタッチされている場合、すべて非同期で並行実行される
+- ハンドラー障害: ポリシーを決定する（フェイルファスト vs. ログして継続）。デフォルト推奨: キャッチ、ログ、失敗が表面化する必要がない限りクライアントに201 Createdを返す
+- TCP接続エラー: 接続失敗時はログに記録し、アプリケーションは継続実行される
+- タイムアウト: ビジネス要件に応じてハンドラー内にタイムアウトロジックを実装することを検討
 
-## Security Considerations
-- Sample endpoints are unauthenticated; add auth (API keys, JWT) if exposed beyond trusted networks.
-- Prefer HTTPS in production; configure `app.Urls` accordingly.
-- Validate/limit payload size to prevent abuse.
+## セキュリティ考慮事項
+- サンプルエンドポイントは認証なし；信頼されたネットワークを超えて公開する場合は認証（APIキー、JWT）を追加
+- 本番環境ではHTTPSを推奨；`app.Urls`を適切に設定
+- ペイロードサイズを検証/制限して悪用を防止
 
-## Open Questions / Future Work
-- Should start/end be idempotent or carry correlation IDs?
-- Backpressure/queueing if handlers are long‑running.
-- Structured logging and diagnostics events.
+## 未解決の課題 / 将来の作業
+- start/endはべき等であるべきか、相関IDを持つべきか？
+- ハンドラーが長時間実行される場合のバックプレッシャー/キューイング
+- 構造化ログと診断イベント
+- TCP接続の永続化と再接続ロジック
+- IfUtilityの具体的な実装とビジネスロジックの追加
