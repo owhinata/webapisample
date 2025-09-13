@@ -1,0 +1,99 @@
+# Cursor Rules for MyWebApi + MyAppMain + IfUtility
+
+## Project Overview
+This is a .NET 8 solution with three main components:
+- **MyWebApi**: Self-hosted Web API with rate limiting and event-based integration
+- **MyAppMain**: Orchestrator that wraps MyWebApiHost with lifecycle management
+- **IfUtility**: Shared utility library
+
+## Architecture Principles
+- Event-driven architecture with synchronous event handlers
+- Decoupled design: MyAppMain uses delegates to integrate with external libraries
+- No direct coupling to ASP.NET Core/DI in MyAppMain
+- Versioned endpoints under `/v1` route group
+- Global rate limiting (1 concurrent request, no queueing)
+
+## Code Style & Standards
+
+### C# Conventions
+- Use 4-space indentation
+- File-scoped namespaces
+- Enable nullable reference types (`<Nullable>enable</Nullable>`)
+- Enable implicit usings (`<ImplicitUsings>enable</ImplicitUsings>`)
+- PascalCase for types, methods, properties, events
+- camelCase for local variables and parameters
+- Interfaces prefixed with `I`
+- One top-level type per file
+
+### Project Structure
+- Controllers go in `Controllers/` directory
+- Shared services in `Services/` directory
+- Data/EF code in `Data/` directory
+- Group code by feature (e.g., `Weather/WeatherEndpoints.cs`)
+
+### API Design
+- Prefer minimal APIs and route groups
+- Use kebab-case for routes (e.g., `/weather-forecasts`)
+- Version endpoints under `/v1`, `/v2`, etc.
+- Return 201 Created on success, 429 Too Many Requests when rate limited
+- Use raw JSON strings for event payloads to avoid coupling
+
+## Event-Driven Integration
+- MyWebApiHost exposes synchronous events: `StartRequested` and `EndRequested`
+- Events use `Action<string>` for raw JSON body handling
+- MyAppMain subscribes to events and invokes external library delegates
+- For async operations in handlers, use `Task.Run` or async void patterns
+
+## Testing Guidelines
+- Use MSTest v2 framework
+- Write black-box tests that start MyWebApiHost on free ports
+- Use `HttpClient` to test endpoints
+- Allocate free ports per test to avoid conflicts
+- Test both success and rate limiting scenarios
+- Use `TaskCompletionSource<string>` for testing event handlers
+
+## Build & Development
+- Target .NET 8 (`net8.0`)
+- Use `dotnet build -c Release` for production builds
+- Use `dotnet watch run` for development with hot reload
+- Run tests with `dotnet test -c Release`
+- Use `dotnet user-secrets` for development configuration
+
+## Security & Configuration
+- Never commit secrets; use `dotnet user-secrets` for development
+- Configure CORS explicitly per environment
+- Prefer HTTPS in production
+- Validate and limit payload sizes
+- Add authentication/authorization for production use
+
+## Error Handling
+- Catch, log, and continue for handler failures (unless failures must be surfaced)
+- Implement timeout logic within handlers if required
+- Handle rate limiting gracefully with 429 responses
+- Use structured logging for diagnostics
+
+## Commit & PR Guidelines
+- Use Conventional Commits format
+- Subject line: max 80 characters
+- Include brief description body for features/fixes
+- PRs should build cleanly and document public API changes
+- Include validation steps and screenshots for UI changes
+
+## File Organization
+- Keep related files together by feature
+- Use descriptive file names that match their primary type
+- Place shared utilities in IfUtility project
+- Keep MyAppMain focused on orchestration logic
+- Maintain clear separation between Web API and business logic
+
+## Performance Considerations
+- Rate limiting prevents system overload
+- Synchronous event handling for simplicity
+- Consider backpressure/queueing for long-running handlers
+- Use appropriate HTTP status codes for different scenarios
+
+## Documentation
+- Keep architecture notes in `docs/DESIGN.md`
+- Update README.md with usage examples
+- Document public APIs and integration points
+- Include troubleshooting guides for common issues
