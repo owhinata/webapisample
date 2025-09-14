@@ -187,7 +187,7 @@ curl -X POST http://localhost:5008/v1/start \
 ```
 
 ### 期待される動作
-- **成功時**: `201 Created` レスポンス
+- **成功時**: `200 OK` レスポンス
 - **レート制限時**: `429 Too Many Requests` レスポンス
 - **TCP接続**: JSONに`address`と`port`が含まれる場合、TCPサーバーに接続
 

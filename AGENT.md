@@ -9,7 +9,7 @@
   - Event-based integration via `StartRequested`/`EndRequested` events
   - Versioned endpoints under `/v1` route group (`/v1/start`, `/v1/end`)
   - Global rate limiting (1 concurrent request, no queueing)
-  - Returns 201 Created on success, 429 Too Many Requests when rate limited
+  - Returns 200 OK on success, 429 Too Many Requests when rate limited
 - Add controllers (if used) under `Controllers/`; shared services under `Services/`; data/EF code under `Data/`.
 
 ## Build, Test, and Development Commands

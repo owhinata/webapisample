@@ -192,7 +192,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
     {
         var body = await ReadRequestBodyAsync(request);
         await InvokeEventHandlersAsync(StartRequested, body);
-        return Results.Created("/v1/start", new { message = "started" });
+        return Results.Ok(new { message = "started" });
     }
 
     /// <summary>
@@ -202,7 +202,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
     {
         var body = await ReadRequestBodyAsync(request);
         await InvokeEventHandlersAsync(EndRequested, body);
-        return Results.Created("/v1/end", new { message = "ended" });
+        return Results.Ok(new { message = "ended" });
     }
 
     /// <summary>

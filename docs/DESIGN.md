@@ -10,7 +10,7 @@
   - Kestrelを自己ホストし、バージョン付きエンドポイント`/v1/start`と`/v1/end`を公開
   - 生のPOSTボディ文字列でイベントを発生させる
   - グローバルレート制限を実装（1同時リクエスト、キューなし）
-  - 成功時は201 Created、レート制限時は429 Too Many Requestsを返す
+  - 成功時は200 OK、レート制限時は429 Too Many Requestsを返す
 - `MyAppMain` (新規)
   - `MyWebApiHost`を`Start(int port)`/`Stop()`でラップするオーケストレーター
   - `MyWebApi`イベントに購読し、TCP接続ロジックとIfUtilityメソッドを呼び出す
@@ -98,7 +98,7 @@ public async Task Posting_Start_Triggers_External_Handler()
         var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
         var json = "{\"address\":\"localhost\",\"port\":8080}";
         var res = await client.PostAsync("/v1/start", new StringContent(json, Encoding.UTF8, "application/json"));
-        Assert.AreEqual(HttpStatusCode.Created, res.StatusCode);
+        Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
         var received = await startTcs.Task.TimeoutAfter(TimeSpan.FromSeconds(3));
         StringAssert.Contains(received, "\"localhost\"");
     }
@@ -109,7 +109,7 @@ public async Task Posting_Start_Triggers_External_Handler()
 ## 並行性とエラーハンドリング
 - レート制限: グローバルレート制限により1同時リクエストのみ許可（キューなし）。制限超過時は429 Too Many Requestsを返す
 - 複数購読者: 複数のハンドラーがアタッチされている場合、すべて非同期で並行実行される
-- ハンドラー障害: ポリシーを決定する（フェイルファスト vs. ログして継続）。デフォルト推奨: キャッチ、ログ、失敗が表面化する必要がない限りクライアントに201 Createdを返す
+- ハンドラー障害: ポリシーを決定する（フェイルファスト vs. ログして継続）。デフォルト推奨: キャッチ、ログ、失敗が表面化する必要がない限りクライアントに200 OKを返す
 - TCP接続エラー: 接続失敗時はログに記録し、アプリケーションは継続実行される
 - タイムアウト: ビジネス要件に応じてハンドラー内にタイムアウトロジックを実装することを検討
 
