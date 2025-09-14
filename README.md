@@ -135,6 +135,9 @@ dotnet test -c Release
 # 特定プロジェクトのテスト
 dotnet test MyAppMain.Tests -c Release
 
+# 詳細ログ付きでテスト実行（Console.WriteLineの出力を表示）
+dotnet test MyAppMain.Tests --logger "console;verbosity=detailed"
+
 # テスト一覧表示
 dotnet test MyAppMain.Tests --list-tests
 
