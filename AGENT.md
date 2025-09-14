@@ -38,6 +38,7 @@
 - Optional in-proc testing: If needed, use `Microsoft.AspNetCore.TestHost` and refactor host wiring to allow in-memory testing without opening sockets.
 
 ## Commit & Pull Request Guidelines
+- Code formatting: run `dotnet format` on all projects before committing to ensure consistent code style.
 - Commits: use Conventional Commits (e.g., `feat: add weather endpoint`, `fix: handle null summary`).
 - Subject line: single line, max 80 characters.
 - Feature/Fix commits: add a brief description body (what/why, and how to validate) below the title.

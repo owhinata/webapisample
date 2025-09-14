@@ -210,6 +210,16 @@ curl -X POST http://localhost:5008/v1/start \
 
 ### Git ワークフロー
 
+#### コミット前の準備
+```bash
+# コードフォーマット（コミット前に必ず実行）
+dotnet format \
+  MyWebApi/MyWebApi.csproj \
+  MyAppMain/MyAppMain.csproj \
+  IfUtility/IfUtility.csproj \
+  MyAppMain.Tests/MyAppMain.Tests.csproj
+```
+
 #### コミット規約
 ```bash
 # 機能追加

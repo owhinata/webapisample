@@ -73,6 +73,7 @@ This is a .NET 8 solution with three main components:
 - Use structured logging for diagnostics
 
 ## Commit & PR Guidelines
+- Run `dotnet format` on all projects before committing
 - Use Conventional Commits format
 - Subject line: max 80 characters
 - Include brief description body for features/fixes
