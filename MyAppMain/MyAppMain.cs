@@ -32,19 +32,19 @@ public sealed class MyAppMain : IDisposable
     {
         // Call IfUtility first
         _utility.HandleStart(json);
-        
+
         // Then handle TCP connection directly
         try
         {
             var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
-            
-            if (root.TryGetProperty("address", out var addressProp) && 
+
+            if (root.TryGetProperty("address", out var addressProp) &&
                 root.TryGetProperty("port", out var portProp))
             {
                 var address = addressProp.GetString();
                 var port = portProp.GetInt32();
-                
+
                 ConnectToTcpServer(address!, port);
             }
         }
@@ -59,7 +59,7 @@ public sealed class MyAppMain : IDisposable
     {
         // Call IfUtility first
         _utility.HandleEnd(json);
-        
+
         // Then handle TCP disconnection
         DisconnectFromTcpServer();
     }
@@ -69,7 +69,7 @@ public sealed class MyAppMain : IDisposable
         try
         {
             DisconnectFromTcpServer(); // Ensure any existing connection is closed
-            
+
             _tcpClient = new TcpClient();
             _tcpClient.Connect(address, port);
             Console.WriteLine($"Connected to TCP server at {address}:{port}");
@@ -81,7 +81,7 @@ public sealed class MyAppMain : IDisposable
             _tcpClient = null;
         }
     }
-    
+
     private void DisconnectFromTcpServer()
     {
         if (_tcpClient != null)

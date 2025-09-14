@@ -233,16 +233,16 @@ public sealed class MyWebApiHost : IAsyncDisposable
     {
         if (app is not null)
         {
-            try 
-            { 
-                await app.DisposeAsync(); 
-            } 
-            catch 
-            { 
+            try
+            {
+                await app.DisposeAsync();
+            }
+            catch
+            {
                 // Ignore disposal errors during cleanup
             }
         }
-        
+
         linkedCts?.Dispose();
     }
 
