@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace MyWebApi;
@@ -56,44 +57,20 @@ public sealed class MyWebApiHost : IAsyncDisposable
                 return false;
         }
 
-        var options = new WebApplicationOptions
-        {
-            ContentRootPath = AppContext.BaseDirectory,
-        };
+        var options = new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory };
 
         WebApplication? app = null;
         CancellationTokenSource? linkedCts = null;
         try
         {
             var builder = WebApplication.CreateBuilder(options);
-            // Configure global concurrency limiter: 1 concurrent request, no queue.
-            builder.Services.AddRateLimiter(o =>
-            {
-                o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-                    _ =>
-                        RateLimitPartition.GetConcurrencyLimiter(
-                            "global",
-                            _ => new ConcurrencyLimiterOptions
-                            {
-                                PermitLimit = 1,
-                                QueueLimit = 0,
-                                QueueProcessingOrder =
-                                    QueueProcessingOrder.OldestFirst,
-                            }
-                        )
-                );
-                o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-            });
+            ConfigureRateLimiter(builder.Services);
 
             app = builder.Build();
             app.Urls.Add($"http://0.0.0.0:{port}");
-            // Enable the rate limiter middleware
             app.UseRateLimiter();
 
-            // POST-only sample endpoints under versioned route group /v1
-            var v1 = app.MapGroup("/v1");
-            v1.MapPost("/start", HandleStartRequest);
-            v1.MapPost("/end", HandleEndRequest);
+            MapV1Endpoints(app);
 
             linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken
@@ -114,6 +91,32 @@ public sealed class MyWebApiHost : IAsyncDisposable
             await CleanupResourcesAsync(app, linkedCts);
             return false;
         }
+    }
+
+    private static void ConfigureRateLimiter(IServiceCollection services)
+    {
+        services.AddRateLimiter(o =>
+        {
+            o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
+                RateLimitPartition.GetConcurrencyLimiter(
+                    "global",
+                    _ => new ConcurrencyLimiterOptions
+                    {
+                        PermitLimit = 1,
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                    }
+                )
+            );
+            o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        });
+    }
+
+    private void MapV1Endpoints(WebApplication app)
+    {
+        var v1 = app.MapGroup("/v1");
+        v1.MapPost("/start", HandleStartRequest);
+        v1.MapPost("/end", HandleEndRequest);
     }
 
     /// <summary>

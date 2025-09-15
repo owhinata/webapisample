@@ -342,71 +342,34 @@ public sealed class MyAppMain : IAsyncDisposable
         {
             if (cmd.Type == "start")
             {
-                var doc = JsonDocument.Parse(cmd.RawJson);
-                var root = doc.RootElement;
-                if (
-                    root.TryGetProperty("address", out var addressProp)
-                    && root.TryGetProperty("port", out var portProp)
-                )
+                var (address, port) = TryParseServerInfo(cmd.RawJson);
+                if (address is not null && port is not null)
                 {
-                    var address = addressProp.GetString();
-                    var port = portProp.GetInt32();
-                    if (!string.IsNullOrEmpty(address) && IsValidPort(port))
-                    {
-                        ConnectToTcpServer(address!, port);
-                    }
+                    ConnectToTcpServer(address, port.Value);
                 }
                 return new ValueTask<MyAppNotificationHub.ModelResult>(
-                    new MyAppNotificationHub.ModelResult(
-                    cmd.ControllerId,
-                    cmd.Type,
-                    true,
-                    null,
-                    new { Connected = IsConnected },
-                    cmd.CorrelationId,
-                    DateTimeOffset.UtcNow
-                ));
+                    SuccessResult(cmd.ControllerId, cmd.Type, cmd.CorrelationId)
+                );
             }
             else if (cmd.Type == "end")
             {
                 DisconnectFromTcpServer();
                 return new ValueTask<MyAppNotificationHub.ModelResult>(
-                    new MyAppNotificationHub.ModelResult(
-                    cmd.ControllerId,
-                    cmd.Type,
-                    true,
-                    null,
-                    new { Connected = IsConnected },
-                    cmd.CorrelationId,
-                    DateTimeOffset.UtcNow
-                ));
+                    SuccessResult(cmd.ControllerId, cmd.Type, cmd.CorrelationId)
+                );
             }
             else
             {
                 return new ValueTask<MyAppNotificationHub.ModelResult>(
-                    new MyAppNotificationHub.ModelResult(
-                    cmd.ControllerId,
-                    cmd.Type,
-                    false,
-                    "Unknown command type",
-                    null,
-                    cmd.CorrelationId,
-                    DateTimeOffset.UtcNow
-                ));
+                    ErrorResult(cmd.ControllerId, cmd.Type, "Unknown command type", cmd.CorrelationId)
+                );
             }
         }
         catch (Exception ex)
         {
             return new ValueTask<MyAppNotificationHub.ModelResult>(
-                new MyAppNotificationHub.ModelResult(
-                cmd.ControllerId,
-                cmd.Type,
-                false,
-                ex.Message,
-                null,
-                cmd.CorrelationId,
-                DateTimeOffset.UtcNow
-            ));
+                ErrorResult(cmd.ControllerId, cmd.Type, ex.Message, cmd.CorrelationId)
+            );
         }
     }
 
@@ -433,6 +396,64 @@ public sealed class MyAppMain : IAsyncDisposable
             else if (res!.Type == "end")
                 _notificationHub?.NotifyEndCompleted(res);
         }
+    }
+
+    private static (string? address, int? port) TryParseServerInfo(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (
+                root.TryGetProperty("address", out var addressProp)
+                && root.TryGetProperty("port", out var portProp)
+            )
+            {
+                var address = addressProp.GetString();
+                var port = portProp.GetInt32();
+                return (address, port);
+            }
+        }
+        catch
+        {
+            // Ignore parse errors; handled by caller via result
+        }
+        return (null, null);
+    }
+
+    private MyAppNotificationHub.ModelResult SuccessResult(
+        string controllerId,
+        string type,
+        string? correlationId
+    )
+    {
+        return new MyAppNotificationHub.ModelResult(
+            controllerId,
+            type,
+            true,
+            null,
+            new { Connected = IsConnected },
+            correlationId,
+            DateTimeOffset.UtcNow
+        );
+    }
+
+    private static MyAppNotificationHub.ModelResult ErrorResult(
+        string controllerId,
+        string type,
+        string error,
+        string? correlationId
+    )
+    {
+        return new MyAppNotificationHub.ModelResult(
+            controllerId,
+            type,
+            false,
+            error,
+            null,
+            correlationId,
+            DateTimeOffset.UtcNow
+        );
     }
 
     #endregion
