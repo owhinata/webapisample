@@ -2,6 +2,7 @@ using MyWebApi;
 using AppEventJunction;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Threading.Channels;
 
 namespace MyAppMain;
 
@@ -14,6 +15,12 @@ public sealed class MyAppMain : IAsyncDisposable
     private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
     private readonly AppEventJunction.AppEventJunction? _junction;
+    private readonly List<IAppController> _controllers = new();
+    private Channel<AppEventJunction.ModelCommand>? _commandChannel;
+    private Channel<AppEventJunction.ModelResult>? _notifyChannel;
+    private CancellationTokenSource? _cts;
+    private Task? _processorTask;
+    private Task? _notifierTask;
     private TcpClient? _tcpClient;
     private bool _disposed;
 
@@ -24,9 +31,7 @@ public sealed class MyAppMain : IAsyncDisposable
     public MyAppMain(AppEventJunction.AppEventJunction? junction = null)
     {
         _junction = junction;
-        // Subscribe at construction time to avoid missing early POSTs right after Start.
-        _host.StartRequested += OnStartMessageReceived;
-        _host.EndRequested += OnEndMessageReceived;
+        // Controllers are registered explicitly; default WebAPI controller is created on Start(port).
     }
 
     /// <summary>
@@ -73,7 +78,31 @@ public sealed class MyAppMain : IAsyncDisposable
                 return false;
         }
 
-        return await _host.StartAsync(port, cancellationToken);
+        if (_cts is not null) return false; // already started
+
+        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _commandChannel = Channel.CreateUnbounded<AppEventJunction.ModelCommand>();
+        _notifyChannel = Channel.CreateUnbounded<AppEventJunction.ModelResult>();
+
+        // Start background processor and notifier to separate contexts
+        _processorTask = Task.Run(() => ProcessCommandsAsync(_cts.Token));
+        _notifierTask = Task.Run(() => DispatchNotificationsAsync(_cts.Token));
+
+        // If no controllers registered, add default WebAPI controller for the given port
+        if (_controllers.Count == 0)
+        {
+            var adapter = new WebApiControllerAdapter(_host, port);
+            RegisterController(adapter);
+        }
+
+        // Start all controllers
+        foreach (var c in _controllers)
+        {
+            var ok = await c.StartAsync(_cts.Token);
+            if (!ok) return false;
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -89,7 +118,33 @@ public sealed class MyAppMain : IAsyncDisposable
                 return false;
         }
 
-        return await _host.StopAsync(cancellationToken);
+        var cts = _cts;
+        _cts = null;
+        try
+        {
+            if (cts is null) return false;
+            cts.Cancel();
+
+            // Stop all controllers
+            foreach (var c in _controllers)
+            {
+                try { await c.StopAsync(cancellationToken); } catch { }
+            }
+
+            // Wait for workers
+            if (_processorTask is not null)
+                try { await _processorTask; } catch { }
+            if (_notifierTask is not null)
+                try { await _notifierTask; } catch { }
+
+            return true;
+        }
+        finally
+        {
+            cts?.Dispose();
+            _commandChannel = null;
+            _notifyChannel = null;
+        }
     }
 
     /// <summary>
@@ -103,33 +158,8 @@ public sealed class MyAppMain : IAsyncDisposable
         {
             if (_disposed) return;
         }
-
-        // Notify observers via junction if provided
-        _junction?.HandleStart(json);
-
-        // Then handle TCP connection directly
-        try
-        {
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("address", out var addressProp) &&
-                root.TryGetProperty("port", out var portProp))
-            {
-                var address = addressProp.GetString();
-                var port = portProp.GetInt32();
-
-                if (!string.IsNullOrEmpty(address) && IsValidPort(port))
-                {
-                    ConnectToTcpServer(address, port);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            // Log or handle connection error
-            Console.WriteLine($"Failed to connect to TCP server: {ex.Message}");
-        }
+        // Enqueue as command when using direct subscription (legacy path)
+        _commandChannel?.Writer.TryWrite(new AppEventJunction.ModelCommand("webapi:legacy", "start", json, null, DateTimeOffset.UtcNow));
     }
 
     /// <summary>
@@ -143,12 +173,14 @@ public sealed class MyAppMain : IAsyncDisposable
         {
             if (_disposed) return;
         }
+        _commandChannel?.Writer.TryWrite(new AppEventJunction.ModelCommand("webapi:legacy", "end", json, null, DateTimeOffset.UtcNow));
+    }
 
-        // Notify observers via junction if provided
-        _junction?.HandleEnd(json);
-
-        // Then handle TCP disconnection
-        DisconnectFromTcpServer();
+    public void RegisterController(IAppController controller)
+    {
+        if (controller == null) throw new ArgumentNullException(nameof(controller));
+        _controllers.Add(controller);
+        controller.CommandRequested += cmd => _commandChannel?.Writer.TryWrite(cmd);
     }
 
     /// <summary>
@@ -227,10 +259,82 @@ public sealed class MyAppMain : IAsyncDisposable
     {
         if (_disposed) return;
 
-        _host.StartRequested -= OnStartMessageReceived;
-        _host.EndRequested -= OnEndMessageReceived;
         DisconnectFromTcpServer();
         _disposed = true;
+    }
+
+    private async Task ProcessCommandsAsync(CancellationToken ct)
+    {
+        var reader = _commandChannel!.Reader;
+        while (!ct.IsCancellationRequested)
+        {
+            AppEventJunction.ModelCommand cmd;
+            try
+            {
+                if (!await reader.WaitToReadAsync(ct)) break;
+                if (!reader.TryRead(out cmd)) continue;
+            }
+            catch (OperationCanceledException) { break; }
+
+            var result = await HandleCommandAsync(cmd, ct);
+            _notifyChannel?.Writer.TryWrite(result);
+        }
+    }
+
+    private async Task<AppEventJunction.ModelResult> HandleCommandAsync(AppEventJunction.ModelCommand cmd, CancellationToken ct)
+    {
+        try
+        {
+            if (cmd.Type == "start")
+            {
+                var doc = JsonDocument.Parse(cmd.RawJson);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("address", out var addressProp) &&
+                    root.TryGetProperty("port", out var portProp))
+                {
+                    var address = addressProp.GetString();
+                    var port = portProp.GetInt32();
+                    if (!string.IsNullOrEmpty(address) && IsValidPort(port))
+                    {
+                        ConnectToTcpServer(address!, port);
+                    }
+                }
+                return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
+            }
+            else if (cmd.Type == "end")
+            {
+                DisconnectFromTcpServer();
+                return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
+            }
+            else
+            {
+                return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, false, "Unknown command type", null, cmd.CorrelationId, DateTimeOffset.UtcNow);
+            }
+        }
+        catch (Exception ex)
+        {
+            return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, false, ex.Message, null, cmd.CorrelationId, DateTimeOffset.UtcNow);
+        }
+    }
+
+    private async Task DispatchNotificationsAsync(CancellationToken ct)
+    {
+        var reader = _notifyChannel!.Reader;
+        while (!ct.IsCancellationRequested)
+        {
+            AppEventJunction.ModelResult res;
+            try
+            {
+                if (!await reader.WaitToReadAsync(ct)) break;
+                if (!reader.TryRead(out res)) continue;
+            }
+            catch (OperationCanceledException) { break; }
+
+            if (res.Type == "start")
+                _junction?.NotifyStartCompleted(res);
+            else if (res.Type == "end")
+                _junction?.NotifyEndCompleted(res);
+        }
     }
 
     #endregion

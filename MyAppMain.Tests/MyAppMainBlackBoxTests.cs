@@ -14,9 +14,9 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
-        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<AppEventJunction.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var util = new AppEventJunction.AppEventJunction();
-        util.StartRequested += json => tcs.TrySetResult(json);
+        util.StartCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -29,7 +29,8 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/start", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            Assert.AreEqual(body, received, "Start JSON should be forwarded to observers");
+            Assert.AreEqual("start", received.Type);
+            Assert.IsTrue(received.Success);
         }
         finally
         {
@@ -68,9 +69,9 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
-        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<AppEventJunction.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
         var util = new AppEventJunction.AppEventJunction();
-        util.EndRequested += json => tcs.TrySetResult(json);
+        util.EndCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -83,7 +84,8 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/end", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            Assert.AreEqual(body, received, "End JSON should be forwarded to observers");
+            Assert.AreEqual("end", received.Type);
+            Assert.IsTrue(received.Success);
         }
         finally
         {
@@ -115,10 +117,11 @@ public class MyAppMainBlackBoxTests
         using var testServer = new TestTcpServer();
         var serverPort = testServer.Start();
 
-        // Create test utility that will capture the connection
-        var connectionTcs = new TaskCompletionSource<TcpClient>();
-        var utilWithTcp = new TestAppEventJunctionSubscriber(connectionTcs);
-        var app = new global::MyAppMain.MyAppMain(utilWithTcp.Junction);
+        // Create junction to receive completion events
+        var junction = new AppEventJunction.AppEventJunction();
+        var startDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        junction.StartCompleted += res => { if (res.Success) startDone.TrySetResult(true); };
+        var app = new global::MyAppMain.MyAppMain(junction);
         var apiPort = GetFreeTcpPort();
 
         try
@@ -138,18 +141,12 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/start", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
 
-            // Wait for TCP connection
+            // Wait for model completion and server accept
             var acceptTask = testServer.AcceptConnectionAsync();
-            var tcpClient = await WaitAsync(connectionTcs.Task, TimeSpan.FromSeconds(3));
-            Assert.IsNotNull(tcpClient, "TCP client should be created");
-            Assert.IsTrue(tcpClient.Connected, "TCP client should be connected");
-
-            // Verify server received connection
+            await WaitAsync(startDone.Task, TimeSpan.FromSeconds(3));
             var serverClient = await WaitAsync(acceptTask, TimeSpan.FromSeconds(3));
             Assert.IsNotNull(serverClient, "Server should receive connection");
-
-            // Cleanup
-            tcpClient.Close();
+            Assert.IsTrue(app.IsConnected, "Model should be connected after start");
             serverClient.Close();
         }
         finally
@@ -161,39 +158,7 @@ public class MyAppMainBlackBoxTests
 
 
 
-class TestAppEventJunctionSubscriber
-{
-    private readonly TaskCompletionSource<TcpClient> _connectionTcs;
-    public AppEventJunction.AppEventJunction Junction { get; } = new();
-
-    public TestAppEventJunctionSubscriber(TaskCompletionSource<TcpClient> connectionTcs)
-    {
-        _connectionTcs = connectionTcs;
-        Junction.StartRequested += async json =>
-        {
-            try
-            {
-                var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                if (root.TryGetProperty("address", out var addressProp) &&
-                    root.TryGetProperty("port", out var portProp))
-                {
-                    var address = addressProp.GetString();
-                    var port = portProp.GetInt32();
-
-                    var tcpClient = new TcpClient();
-                    await tcpClient.ConnectAsync(address!, port);
-                    _connectionTcs.TrySetResult(tcpClient);
-                }
-            }
-            catch (Exception ex)
-            {
-                _connectionTcs.TrySetException(ex);
-            }
-        };
-    }
-}
+// Subscriber helper no longer needed under result-driven notifications
 
 class TestTcpServer : IDisposable
 {

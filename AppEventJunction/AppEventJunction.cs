@@ -9,6 +9,9 @@ namespace AppEventJunction;
 /// </summary>
 public class AppEventJunction
 {
+    // Result notifications (preferred for MVC)
+    public event Action<ModelResult>? StartCompleted;
+    public event Action<ModelResult>? EndCompleted;
     /// <summary>
     /// Raised when MyAppMain reports a start event. Invoked synchronously.
     /// </summary>
@@ -36,4 +39,8 @@ public class AppEventJunction
     {
         EndRequested?.Invoke(json);
     }
+
+    // Public helpers for model to raise results
+    public void NotifyStartCompleted(ModelResult result) => StartCompleted?.Invoke(result);
+    public void NotifyEndCompleted(ModelResult result) => EndCompleted?.Invoke(result);
 }
