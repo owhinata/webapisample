@@ -35,7 +35,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
     /// </summary>
     public event Action<string>? EndRequested;
 
-    
+
 
     /// <summary>
     /// Asynchronously starts the Web API host on the specified port.
