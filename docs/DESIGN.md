@@ -31,6 +31,25 @@ public interface IAppController
 既存の`MyWebApiHost`は、薄いアダプタ（例: `WebApiControllerAdapter`）で`IAppController`に適合させ、
 `/v1/start`や`/v1/end`のPOST受信時に`CommandRequested`を発火する。
 
+### WebAPI をアダプタにする理由
+
+- 依存方向の健全化:
+  - `IAppController` はアプリ側の抽象。`MyWebApiHost` が直接実装すると、
+    `MyWebApi`→アプリ側への依存が生じる。
+  - アダプタ越しなら、`MyWebApiHost` はアプリ抽象を知らずに済む。
+- 責務分離と再利用性:
+  - Host は「エンドポイント/レート制限/イベント発火」に専念。
+  - 入力の正規化や相関ID付与などアプリ固有の変換はアダプタで行う。
+- 破壊的変更の回避:
+  - Host の公開API（イベント）を保ちつつ拡張できる。
+  - Host を `IAppController` 化すると公開APIに抽象が混ざる。
+- テスト・拡張の柔軟性:
+  - WebAPI/CLI/MQ などコントローラをアダプタ単位で追加・差し替え可能。
+- 循環参照の回避:
+  - 直接実装だと、共通抽象の切出しや参照関係の再設計が必要になりやすい。
+- OCP（開放/閉鎖原則）:
+  - 新しい入力経路の追加で Host は変更不要。アダプタ追加で対応できる。
+
 ## データ契約
 ```csharp
 public record ModelCommand(
