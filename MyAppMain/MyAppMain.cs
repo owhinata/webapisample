@@ -315,7 +315,7 @@ public sealed class MyAppMain : IAsyncDisposable
         var reader = _commandChannel!.Reader;
         while (!ct.IsCancellationRequested)
         {
-            MyAppNotificationHub.ModelCommand cmd;
+            MyAppNotificationHub.ModelCommand? cmd;
             try
             {
                 if (!await reader.WaitToReadAsync(ct))
@@ -328,12 +328,12 @@ public sealed class MyAppMain : IAsyncDisposable
                 break;
             }
 
-            var result = await HandleCommandAsync(cmd, ct);
+            var result = await HandleCommandAsync(cmd!, ct);
             _notifyChannel?.Writer.TryWrite(result);
         }
     }
 
-    private async Task<MyAppNotificationHub.ModelResult> HandleCommandAsync(
+    private ValueTask<MyAppNotificationHub.ModelResult> HandleCommandAsync(
         MyAppNotificationHub.ModelCommand cmd,
         CancellationToken ct
     )
@@ -356,7 +356,8 @@ public sealed class MyAppMain : IAsyncDisposable
                         ConnectToTcpServer(address!, port);
                     }
                 }
-                return new MyAppNotificationHub.ModelResult(
+                return new ValueTask<MyAppNotificationHub.ModelResult>(
+                    new MyAppNotificationHub.ModelResult(
                     cmd.ControllerId,
                     cmd.Type,
                     true,
@@ -364,12 +365,13 @@ public sealed class MyAppMain : IAsyncDisposable
                     new { Connected = IsConnected },
                     cmd.CorrelationId,
                     DateTimeOffset.UtcNow
-                );
+                ));
             }
             else if (cmd.Type == "end")
             {
                 DisconnectFromTcpServer();
-                return new MyAppNotificationHub.ModelResult(
+                return new ValueTask<MyAppNotificationHub.ModelResult>(
+                    new MyAppNotificationHub.ModelResult(
                     cmd.ControllerId,
                     cmd.Type,
                     true,
@@ -377,11 +379,12 @@ public sealed class MyAppMain : IAsyncDisposable
                     new { Connected = IsConnected },
                     cmd.CorrelationId,
                     DateTimeOffset.UtcNow
-                );
+                ));
             }
             else
             {
-                return new MyAppNotificationHub.ModelResult(
+                return new ValueTask<MyAppNotificationHub.ModelResult>(
+                    new MyAppNotificationHub.ModelResult(
                     cmd.ControllerId,
                     cmd.Type,
                     false,
@@ -389,12 +392,13 @@ public sealed class MyAppMain : IAsyncDisposable
                     null,
                     cmd.CorrelationId,
                     DateTimeOffset.UtcNow
-                );
+                ));
             }
         }
         catch (Exception ex)
         {
-            return new MyAppNotificationHub.ModelResult(
+            return new ValueTask<MyAppNotificationHub.ModelResult>(
+                new MyAppNotificationHub.ModelResult(
                 cmd.ControllerId,
                 cmd.Type,
                 false,
@@ -402,7 +406,7 @@ public sealed class MyAppMain : IAsyncDisposable
                 null,
                 cmd.CorrelationId,
                 DateTimeOffset.UtcNow
-            );
+            ));
         }
     }
 
@@ -411,7 +415,7 @@ public sealed class MyAppMain : IAsyncDisposable
         var reader = _notifyChannel!.Reader;
         while (!ct.IsCancellationRequested)
         {
-            MyAppNotificationHub.ModelResult res;
+            MyAppNotificationHub.ModelResult? res;
             try
             {
                 if (!await reader.WaitToReadAsync(ct))
@@ -424,9 +428,9 @@ public sealed class MyAppMain : IAsyncDisposable
                 break;
             }
 
-            if (res.Type == "start")
+            if (res!.Type == "start")
                 _notificationHub?.NotifyStartCompleted(res);
-            else if (res.Type == "end")
+            else if (res!.Type == "end")
                 _notificationHub?.NotifyEndCompleted(res);
         }
     }
