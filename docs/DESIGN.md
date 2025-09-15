@@ -1,66 +1,89 @@
-# 設計: MyWebApi + MyAppMain + AppEventJunction
+# 設計: MVC（Controller/Model/View）
 
 ## 目標
-- 既存の`MyWebApi`を中心としたライブラリ群でPOSTリクエストに対するアプリケーションロジックを実行する
-- `MyAppMain`をASP.NET Core/DIに結合させず、代わりに`MyWebApi`のイベントを使用する
-- 外部ライブラリは変更せず（新しいインターフェースなし）、`MyAppMain`からのデリゲートで統合する
+- MVCに整理し、複数コントローラを登録可能にする
+- モデル処理完了後にのみビューへ結果通知を行う
+- コントローラ処理コンテキストとビュー通知コンテキストを分離する
 
-## コンポーネント
-- `MyWebApi` (既存)
-  - Kestrelを自己ホストし、バージョン付きエンドポイント`/v1/start`と`/v1/end`を公開
-  - 生のPOSTボディ文字列でイベントを発生させる
-  - グローバルレート制限を実装（1同時リクエスト、キューなし）
-  - 成功時は200 OK、レート制限時は429 Too Many Requestsを返す
-- `MyAppMain`
-- `MyWebApiHost`の`StartAsync(int port)`/`StopAsync()`を内部で呼び出すオーケストレーター（同期APIは`MyAppMain.Start/Stop`で提供）
-  - `MyWebApi`イベントに購読し、TCP接続ロジックを実行
-  - 外部通知が必要な場合は `AppEventJunction` に同期的に通知（任意）
-  - 直接TCP接続を管理し、JSONペイロードからサーバー情報を抽出する
-- `AppEventJunction`
-  - `StartRequested(string json)` / `EndRequested(string json)` の同期イベントを提供
-  - `HandleStart/HandleEnd` 呼び出しで登録済みイベントを同期発火
-  - 非同期化が必要なら、購読側で委譲（`Task.Run` など）
+## コンポーネント（MVC）
+- Controller（複数可）
+  - 例: `MyWebApiHost`（Web API）をアダプタで`IAppController`化
+  - 外部入力を`ModelCommand`としてモデルに渡す
+  - レート制限、入力検証、相関IDの生成などはコントローラ側で実施可
+- Model（MyAppMain）
+  - 受け取ったコマンドを処理し`ModelResult`を生成
+  - TCP接続/切断などアプリの中核ロジックを担う
+  - 複数コントローラを登録/開始/停止できる
+- View（AppEventJunction購読者）
+  - モデル処理の「結果」を受け取り、UI等に反映
+  - 通知は別スレッドから同期イベントで発火（非同期化は購読側に委譲）
 
-## パブリック契約
-MyWebApiの型との結合を避けるため、イベントとデリゲートは生のJSON文字列を使用する。
-
+## コントローラ抽象化（IAppController）
 ```csharp
-// MyWebApiHostが公開するイベント（シンプルさのため同期）
-public event Action<string>? StartRequested; // 生のボディ
-public event Action<string>? EndRequested;   // 生のボディ
+public interface IAppController
+{
+    string Id { get; }
+    event Action<ModelCommand>? CommandRequested; // 同期発火
+    Task<bool> StartAsync(CancellationToken ct = default);
+    Task<bool> StopAsync(CancellationToken ct = default);
+}
+```
+既存の`MyWebApiHost`は、薄いアダプタ（例: `WebApiControllerAdapter`）で`IAppController`に適合させ、
+`/v1/start`や`/v1/end`のPOST受信時に`CommandRequested`を発火する。
+
+## データ契約
+```csharp
+public record ModelCommand(
+    string ControllerId,
+    string Type,              // "start" | "end" | ...
+    string RawJson,
+    string? CorrelationId,
+    DateTimeOffset Timestamp);
+
+public record ModelResult(
+    string ControllerId,
+    string Type,
+    bool Success,
+    string? Error,
+    object? Payload,
+    string? CorrelationId,
+    DateTimeOffset CompletedAt);
 ```
 
-注意事項:
-- イベントは同期処理のために`Action<string>`を使用する
-- ハンドラー内での非同期操作が必要な場合は、Task.Runやasync voidパターンを検討する
-- イベントハンドラーは非同期で並行実行される（Task.Runでラップ）
+`AppEventJunction`は「結果通知」のイベントを提供する。
+```csharp
+public sealed class AppEventJunction
+{
+    public event Action<ModelResult>? StartCompleted; // 同期イベント
+    public event Action<ModelResult>? EndCompleted;   // 同期イベント
+}
+```
 
 ## データフロー
-1. クライアントがJSONボディ`{ "address": "localhost", "port": 8080 }`で`POST /v1/start`または`/v1/end`を送信
-2. Minimal APIがボディを文字列として読み取る
-3. `MyWebApiHost`が生のJSON文字列で`StartRequested`/`EndRequested`を発生させる
-4. `MyAppMain`の購読済みハンドラーが呼び出される：
-   - 必要に応じて`AppEventJunction.HandleStart/HandleEnd`を呼び出し（同期イベントを外部へ）
-   - JSONからアドレスとポートを抽出してTCP接続を確立/切断
+1. コントローラが外部入力を受け取り`ModelCommand`を発火
+2. `MyAppMain`はコマンドを受理して非同期ワーカーで処理
+3. 処理完了後に`ModelResult`を生成
+4. 専用の通知ディスパッチャが`AppEventJunction`のイベントを同期発火（UIなどが購読）
 
 ## MyAppMainの責任
 - ライフサイクル管理:
-  - `Start(int port)`: イベントに購読し、指定されたポートで`MyWebApiHost`を開始
-  - `Stop()`: `MyWebApiHost`を停止し、ハンドラーの購読を解除
-- 統合ポイント:
-  - コンストラクターで`AppEventJunction`インスタンスを任意で受け取る（省略時は通知なし）
-  - イベントハンドラー内でTCP接続ロジックを直接実装
-  - JSONペイロードからサーバー情報を抽出してTCP接続を管理
+  - `Start(int port)`/`Stop()`: 互換APIを維持しつつ、登録済みコントローラを起動/停止
+- コマンド処理:
+  - `Channel<ModelCommand>`で受信、検証→内部処理（TCP接続/切断など）→結果生成
+- 通知:
+  - 処理完了後にのみ`ModelResult`を通知（生JSONの直接通知は行わない）
+  - 通知は専用ディスパッチャ経由で発火し、コントローラの処理スレッドから分離
 
 使用例:
 
 ```csharp
-// デフォルト（通知なし）
+// 既定（通知なし）
 var app = new MyAppMain();
 app.Start(5008);
 
-// またはジャンクションを注入（UIなどが購読）
+// ビュー（UI）を購読させる
 var junction = new AppEventJunction.AppEventJunction();
+junction.StartCompleted += result => {/* 更新処理 */};
 var app2 = new MyAppMain(junction);
 app2.Start(5008);
 
@@ -80,8 +103,8 @@ app.Stop();
 ## テスト戦略（ブラックボックス）
 - テストプロジェクト`MyAppMain.Tests`はMSTestを使用
 - `MyAppMain`を空いているポートで開始
-- `AppEventJunction`のイベントを購読し、`TaskCompletionSource<string>`で検証
-- `HttpClient`を使用して`/v1/start`と`/v1/end`にPOSTし、受信したJSONを検証
+- コントローラ（WebAPI）経由でコマンド送信
+- `AppEventJunction`の結果イベント`StartCompleted/EndCompleted`を購読し`ModelResult`を検証
 - `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
 テスト例:

@@ -90,8 +90,10 @@ webaipsv/
 ```
 
 #### 🏗️ アーキテクチャ概要
-- **イベント駆動設計**: `MyWebApiHost` がイベントを発行し、`MyAppMain` が処理
-- **疎結合**: デリゲートを使用した外部ライブラリとの統合
+- **MVC構成**: Controller（WebAPI ほか拡張可）/ Model（MyAppMain）/ View（AppEventJunction購読者）
+- **複数コントローラ対応**: 将来的にCLIやMQ等のコントローラ追加が可能
+- **処理結果通知**: モデル処理完了後にのみ`AppEventJunction`経由でビューへ通知
+- **コンテキスト分離**: コントローラ処理とビュー通知は別スレッドで分離
 - **レート制限**: 1同時接続制限でDDoS攻撃を防止
 - **バージョニング**: `/v1` ルートグループでAPIバージョン管理
 - **起動/停止API**: `MyWebApiHost` は `StartAsync/StopAsync` のみを公開（同期APIは `MyAppMain.Start/Stop` を利用）
