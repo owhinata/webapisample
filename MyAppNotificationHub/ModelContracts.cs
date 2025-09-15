@@ -5,7 +5,8 @@ public record ModelCommand(
     string Type,
     string RawJson,
     string? CorrelationId,
-    DateTimeOffset Timestamp);
+    DateTimeOffset Timestamp
+);
 
 public record ModelResult(
     string ControllerId,
@@ -14,4 +15,5 @@ public record ModelResult(
     string? Error,
     object? Payload,
     string? CorrelationId,
-    DateTimeOffset CompletedAt);
+    DateTimeOffset CompletedAt
+);

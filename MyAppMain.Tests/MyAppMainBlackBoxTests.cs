@@ -14,7 +14,9 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
-        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
         hub.StartCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(hub);
@@ -23,7 +25,10 @@ public class MyAppMainBlackBoxTests
         try
         {
             app.Start(port);
-            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://localhost:{port}"),
+            };
             var body = "{\"message\":\"hello\"}";
             var content = new StringContent(body, Encoding.UTF8, "application/json");
             var res = await client.PostAsync("/v1/start", content);
@@ -48,17 +53,32 @@ public class MyAppMainBlackBoxTests
         try
         {
             app.Start(port);
-            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://localhost:{port}"),
+            };
             var body1 = "{\"message\":\"r1\"}";
             var body2 = "{\"message\":\"r2\"}";
-            var t1 = client.PostAsync("/v1/start", new StringContent(body1, Encoding.UTF8, "application/json"));
-            var t2 = client.PostAsync("/v1/start", new StringContent(body2, Encoding.UTF8, "application/json"));
+            var t1 = client.PostAsync(
+                "/v1/start",
+                new StringContent(body1, Encoding.UTF8, "application/json")
+            );
+            var t2 = client.PostAsync(
+                "/v1/start",
+                new StringContent(body2, Encoding.UTF8, "application/json")
+            );
 
             await Task.WhenAll(t1, t2);
 
             var codes = new[] { t1.Result.StatusCode, t2.Result.StatusCode };
-            Assert.IsTrue(codes.Contains(HttpStatusCode.OK), "One request should succeed");
-            Assert.IsTrue(codes.Contains((HttpStatusCode)429), "One request should be rejected with 429");
+            Assert.IsTrue(
+                codes.Contains(HttpStatusCode.OK),
+                "One request should succeed"
+            );
+            Assert.IsTrue(
+                codes.Contains((HttpStatusCode)429),
+                "One request should be rejected with 429"
+            );
         }
         finally
         {
@@ -69,7 +89,9 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
-        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
         hub.EndCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(hub);
@@ -78,7 +100,10 @@ public class MyAppMainBlackBoxTests
         try
         {
             app.Start(port);
-            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://localhost:{port}"),
+            };
             var body = "{\"message\":\"bye\"}";
             var content = new StringContent(body, Encoding.UTF8, "application/json");
             var res = await client.PostAsync("/v1/end", content);
@@ -96,8 +121,12 @@ public class MyAppMainBlackBoxTests
     private static async Task<T> WaitAsync<T>(Task<T> task, TimeSpan timeout)
     {
         using var cts = new CancellationTokenSource(timeout);
-        var completed = await Task.WhenAny(task, Task.Delay(Timeout.InfiniteTimeSpan, cts.Token));
-        if (completed == task) return await task;
+        var completed = await Task.WhenAny(
+            task,
+            Task.Delay(Timeout.InfiniteTimeSpan, cts.Token)
+        );
+        if (completed == task)
+            return await task;
         throw new TimeoutException("Timed out waiting for delegate invocation");
     }
 
@@ -119,22 +148,27 @@ public class MyAppMainBlackBoxTests
 
         // Create junction to receive completion events
         var hub2 = new MyAppNotificationHub.MyAppNotificationHub();
-        var startDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        hub2.StartCompleted += res => { if (res.Success) startDone.TrySetResult(true); };
+        var startDone = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        hub2.StartCompleted += res =>
+        {
+            if (res.Success)
+                startDone.TrySetResult(true);
+        };
         var app = new global::MyAppMain.MyAppMain(hub2);
         var apiPort = GetFreeTcpPort();
 
         try
         {
             app.Start(apiPort);
-            using var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{apiPort}") };
+            using var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://localhost:{apiPort}"),
+            };
 
             // Send server info in JSON
-            var serverInfo = new
-            {
-                address = "127.0.0.1",
-                port = serverPort
-            };
+            var serverInfo = new { address = "127.0.0.1", port = serverPort };
             var json = JsonSerializer.Serialize(serverInfo);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -156,8 +190,6 @@ public class MyAppMainBlackBoxTests
     }
 }
 
-
-
 // Subscriber helper no longer needed under result-driven notifications
 
 class TestTcpServer : IDisposable
@@ -174,7 +206,8 @@ class TestTcpServer : IDisposable
 
     public async Task<TcpClient> AcceptConnectionAsync()
     {
-        if (_listener == null) throw new InvalidOperationException("Server not started");
+        if (_listener == null)
+            throw new InvalidOperationException("Server not started");
         var client = await _listener.AcceptTcpClientAsync();
         _clients.Add(client);
         return client;
@@ -184,7 +217,11 @@ class TestTcpServer : IDisposable
     {
         foreach (var client in _clients)
         {
-            try { client.Close(); } catch { }
+            try
+            {
+                client.Close();
+            }
+            catch { }
         }
         _listener?.Stop();
     }

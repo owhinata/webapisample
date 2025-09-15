@@ -1,14 +1,15 @@
-using MyWebApi;
-using MyAppNotificationHub;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading.Channels;
+using MyAppNotificationHub;
+using MyWebApi;
 
 namespace MyAppMain;
 
 /// <summary>
-/// Main application class that manages Web API host and TCP client connections.
-/// Provides event-based integration with start/end operations and TCP server connectivity.
+/// Main application class that manages Web API host and TCP client
+/// connections. Provides event-based integration with start/end operations
+/// and TCP server connectivity.
 /// </summary>
 public sealed class MyAppMain : IAsyncDisposable
 {
@@ -27,11 +28,16 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <summary>
     /// Initializes a new instance of the MyAppMain class.
     /// </summary>
-    /// <param name="notificationHub">Optional event hub. If null, events are not raised.</param>
-    public MyAppMain(MyAppNotificationHub.MyAppNotificationHub? notificationHub = null)
+    /// <param name="notificationHub">
+    /// Optional event hub. If null, events are not raised.
+    /// </param>
+    public MyAppMain(
+        MyAppNotificationHub.MyAppNotificationHub? notificationHub = null
+    )
     {
         _notificationHub = notificationHub;
-        // Controllers are registered explicitly; default WebAPI controller is created on Start(port).
+        // Controllers are registered explicitly; default WebAPI controller is
+        // created on Start(port).
     }
 
     /// <summary>
@@ -50,16 +56,16 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <param name="port">The port number to listen on (1-65535).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if started successfully, false otherwise.</returns>
-    public bool Start(int port, CancellationToken cancellationToken = default)
-        => StartAsync(port, cancellationToken).GetAwaiter().GetResult();
+    public bool Start(int port, CancellationToken cancellationToken = default) =>
+        StartAsync(port, cancellationToken).GetAwaiter().GetResult();
 
     /// <summary>
     /// Synchronously stops the Web API host.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if stopped successfully, false otherwise.</returns>
-    public bool Stop(CancellationToken cancellationToken = default)
-        => StopAsync(cancellationToken).GetAwaiter().GetResult();
+    public bool Stop(CancellationToken cancellationToken = default) =>
+        StopAsync(cancellationToken).GetAwaiter().GetResult();
 
     /// <summary>
     /// Asynchronously starts the Web API host on the specified port.
@@ -67,7 +73,10 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <param name="port">The port number to listen on (1-65535).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if started successfully, false otherwise.</returns>
-    public async Task<bool> StartAsync(int port, CancellationToken cancellationToken = default)
+    public async Task<bool> StartAsync(
+        int port,
+        CancellationToken cancellationToken = default
+    )
     {
         if (!IsValidPort(port))
             return false;
@@ -78,17 +87,20 @@ public sealed class MyAppMain : IAsyncDisposable
                 return false;
         }
 
-        if (_cts is not null) return false; // already started
+        if (_cts is not null)
+            return false; // already started
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _commandChannel = Channel.CreateUnbounded<MyAppNotificationHub.ModelCommand>();
+        _commandChannel =
+            Channel.CreateUnbounded<MyAppNotificationHub.ModelCommand>();
         _notifyChannel = Channel.CreateUnbounded<MyAppNotificationHub.ModelResult>();
 
         // Start background processor and notifier to separate contexts
         _processorTask = Task.Run(() => ProcessCommandsAsync(_cts.Token));
         _notifierTask = Task.Run(() => DispatchNotificationsAsync(_cts.Token));
 
-        // If no controllers registered, add default WebAPI controller for the given port
+        // If no controllers registered, add default WebAPI controller for the
+        // given port
         if (_controllers.Count == 0)
         {
             var adapter = new WebApiControllerAdapter(_host, port);
@@ -99,7 +111,8 @@ public sealed class MyAppMain : IAsyncDisposable
         foreach (var c in _controllers)
         {
             var ok = await c.StartAsync(_cts.Token);
-            if (!ok) return false;
+            if (!ok)
+                return false;
         }
 
         return true;
@@ -122,20 +135,33 @@ public sealed class MyAppMain : IAsyncDisposable
         _cts = null;
         try
         {
-            if (cts is null) return false;
+            if (cts is null)
+                return false;
             cts.Cancel();
 
             // Stop all controllers
             foreach (var c in _controllers)
             {
-                try { await c.StopAsync(cancellationToken); } catch { }
+                try
+                {
+                    await c.StopAsync(cancellationToken);
+                }
+                catch { }
             }
 
             // Wait for workers
             if (_processorTask is not null)
-                try { await _processorTask; } catch { }
+                try
+                {
+                    await _processorTask;
+                }
+                catch { }
             if (_notifierTask is not null)
-                try { await _notifierTask; } catch { }
+                try
+                {
+                    await _notifierTask;
+                }
+                catch { }
 
             return true;
         }
@@ -149,17 +175,27 @@ public sealed class MyAppMain : IAsyncDisposable
 
     /// <summary>
     /// Event handler for start message received from Web API host.
-    /// Processes the JSON message and establishes TCP connection if address and port are provided.
+    /// Processes the JSON message and establishes TCP connection if address and
+    /// port are provided.
     /// </summary>
     /// <param name="json">The JSON message containing connection details.</param>
     public void OnStartMessageReceived(string json)
     {
         lock (_lock)
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
         }
         // Enqueue as command when using direct subscription (legacy path)
-        _commandChannel?.Writer.TryWrite(new MyAppNotificationHub.ModelCommand("webapi:legacy", "start", json, null, DateTimeOffset.UtcNow));
+        _commandChannel?.Writer.TryWrite(
+            new MyAppNotificationHub.ModelCommand(
+                "webapi:legacy",
+                "start",
+                json,
+                null,
+                DateTimeOffset.UtcNow
+            )
+        );
     }
 
     /// <summary>
@@ -171,14 +207,24 @@ public sealed class MyAppMain : IAsyncDisposable
     {
         lock (_lock)
         {
-            if (_disposed) return;
+            if (_disposed)
+                return;
         }
-        _commandChannel?.Writer.TryWrite(new MyAppNotificationHub.ModelCommand("webapi:legacy", "end", json, null, DateTimeOffset.UtcNow));
+        _commandChannel?.Writer.TryWrite(
+            new MyAppNotificationHub.ModelCommand(
+                "webapi:legacy",
+                "end",
+                json,
+                null,
+                DateTimeOffset.UtcNow
+            )
+        );
     }
 
     public void RegisterController(IAppController controller)
     {
-        if (controller == null) throw new ArgumentNullException(nameof(controller));
+        if (controller == null)
+            throw new ArgumentNullException(nameof(controller));
         _controllers.Add(controller);
         controller.CommandRequested += cmd => _commandChannel?.Writer.TryWrite(cmd);
     }
@@ -257,7 +303,8 @@ public sealed class MyAppMain : IAsyncDisposable
     /// </summary>
     private void CleanupResources()
     {
-        if (_disposed) return;
+        if (_disposed)
+            return;
 
         DisconnectFromTcpServer();
         _disposed = true;
@@ -271,17 +318,25 @@ public sealed class MyAppMain : IAsyncDisposable
             MyAppNotificationHub.ModelCommand cmd;
             try
             {
-                if (!await reader.WaitToReadAsync(ct)) break;
-                if (!reader.TryRead(out cmd)) continue;
+                if (!await reader.WaitToReadAsync(ct))
+                    break;
+                if (!reader.TryRead(out cmd))
+                    continue;
             }
-            catch (OperationCanceledException) { break; }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
 
             var result = await HandleCommandAsync(cmd, ct);
             _notifyChannel?.Writer.TryWrite(result);
         }
     }
 
-    private async Task<MyAppNotificationHub.ModelResult> HandleCommandAsync(MyAppNotificationHub.ModelCommand cmd, CancellationToken ct)
+    private async Task<MyAppNotificationHub.ModelResult> HandleCommandAsync(
+        MyAppNotificationHub.ModelCommand cmd,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -289,8 +344,10 @@ public sealed class MyAppMain : IAsyncDisposable
             {
                 var doc = JsonDocument.Parse(cmd.RawJson);
                 var root = doc.RootElement;
-                if (root.TryGetProperty("address", out var addressProp) &&
-                    root.TryGetProperty("port", out var portProp))
+                if (
+                    root.TryGetProperty("address", out var addressProp)
+                    && root.TryGetProperty("port", out var portProp)
+                )
                 {
                     var address = addressProp.GetString();
                     var port = portProp.GetInt32();
@@ -299,21 +356,53 @@ public sealed class MyAppMain : IAsyncDisposable
                         ConnectToTcpServer(address!, port);
                     }
                 }
-                return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
+                return new MyAppNotificationHub.ModelResult(
+                    cmd.ControllerId,
+                    cmd.Type,
+                    true,
+                    null,
+                    new { Connected = IsConnected },
+                    cmd.CorrelationId,
+                    DateTimeOffset.UtcNow
+                );
             }
             else if (cmd.Type == "end")
             {
                 DisconnectFromTcpServer();
-                return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
+                return new MyAppNotificationHub.ModelResult(
+                    cmd.ControllerId,
+                    cmd.Type,
+                    true,
+                    null,
+                    new { Connected = IsConnected },
+                    cmd.CorrelationId,
+                    DateTimeOffset.UtcNow
+                );
             }
             else
             {
-                return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, false, "Unknown command type", null, cmd.CorrelationId, DateTimeOffset.UtcNow);
+                return new MyAppNotificationHub.ModelResult(
+                    cmd.ControllerId,
+                    cmd.Type,
+                    false,
+                    "Unknown command type",
+                    null,
+                    cmd.CorrelationId,
+                    DateTimeOffset.UtcNow
+                );
             }
         }
         catch (Exception ex)
         {
-            return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, false, ex.Message, null, cmd.CorrelationId, DateTimeOffset.UtcNow);
+            return new MyAppNotificationHub.ModelResult(
+                cmd.ControllerId,
+                cmd.Type,
+                false,
+                ex.Message,
+                null,
+                cmd.CorrelationId,
+                DateTimeOffset.UtcNow
+            );
         }
     }
 
@@ -325,10 +414,15 @@ public sealed class MyAppMain : IAsyncDisposable
             MyAppNotificationHub.ModelResult res;
             try
             {
-                if (!await reader.WaitToReadAsync(ct)) break;
-                if (!reader.TryRead(out res)) continue;
+                if (!await reader.WaitToReadAsync(ct))
+                    break;
+                if (!reader.TryRead(out res))
+                    continue;
             }
-            catch (OperationCanceledException) { break; }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
 
             if (res.Type == "start")
                 _notificationHub?.NotifyStartCompleted(res);

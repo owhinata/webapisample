@@ -1,16 +1,17 @@
+using System.IO;
+using System.Linq;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Hosting;
-using System.Linq;
-using System.IO;
-using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Hosting;
 
 namespace MyWebApi;
 
 /// <summary>
-/// A self-hosted Web API host that provides versioned endpoints for start and end operations.
-/// Supports rate limiting and event-based integration with external handlers.
+/// A self-hosted Web API host that provides versioned endpoints for start and
+/// end operations. Supports rate limiting and event-based integration with
+/// external handlers.
 /// </summary>
 public sealed class MyWebApiHost : IAsyncDisposable
 {
@@ -35,15 +36,16 @@ public sealed class MyWebApiHost : IAsyncDisposable
     /// </summary>
     public event Action<string>? EndRequested;
 
-
-
     /// <summary>
     /// Asynchronously starts the Web API host on the specified port.
     /// </summary>
     /// <param name="port">The port number to listen on (1-65535).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if started successfully, false otherwise.</returns>
-    public async Task<bool> StartAsync(int port, CancellationToken cancellationToken = default)
+    public async Task<bool> StartAsync(
+        int port,
+        CancellationToken cancellationToken = default
+    )
     {
         if (!IsValidPort(port))
             return false;
@@ -67,13 +69,19 @@ public sealed class MyWebApiHost : IAsyncDisposable
             // Configure global concurrency limiter: 1 concurrent request, no queue.
             builder.Services.AddRateLimiter(o =>
             {
-                o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
-                    RateLimitPartition.GetConcurrencyLimiter("global", _ => new ConcurrencyLimiterOptions
-                    {
-                        PermitLimit = 1,
-                        QueueLimit = 0,
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-                    }));
+                o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
+                    _ =>
+                        RateLimitPartition.GetConcurrencyLimiter(
+                            "global",
+                            _ => new ConcurrencyLimiterOptions
+                            {
+                                PermitLimit = 1,
+                                QueueLimit = 0,
+                                QueueProcessingOrder =
+                                    QueueProcessingOrder.OldestFirst,
+                            }
+                        )
+                );
                 o.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             });
 
@@ -87,7 +95,9 @@ public sealed class MyWebApiHost : IAsyncDisposable
             v1.MapPost("/start", HandleStartRequest);
             v1.MapPost("/end", HandleEndRequest);
 
-            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                cancellationToken
+            );
             await app.StartAsync(linkedCts.Token);
 
             lock (_lock)
@@ -202,9 +212,13 @@ public sealed class MyWebApiHost : IAsyncDisposable
     /// <summary>
     /// Invokes all registered event handlers concurrently
     /// </summary>
-    private async Task InvokeEventHandlersAsync(Action<string>? eventHandler, string body)
+    private async Task InvokeEventHandlersAsync(
+        Action<string>? eventHandler,
+        string body
+    )
     {
-        if (eventHandler is null) return;
+        if (eventHandler is null)
+            return;
 
         var handlers = eventHandler.GetInvocationList().Cast<Action<string>>();
         var tasks = handlers.Select(handler => Task.Run(() => handler(body)));
@@ -214,7 +228,10 @@ public sealed class MyWebApiHost : IAsyncDisposable
     /// <summary>
     /// Cleans up resources in case of failure
     /// </summary>
-    private static async Task CleanupResourcesAsync(WebApplication? app, CancellationTokenSource? linkedCts)
+    private static async Task CleanupResourcesAsync(
+        WebApplication? app,
+        CancellationTokenSource? linkedCts
+    )
     {
         if (app is not null)
         {
