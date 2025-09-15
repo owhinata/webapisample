@@ -234,6 +234,21 @@ dotnet format \
   MyAppMain.Tests/MyAppMain.Tests.csproj
 ```
 
+### Gitフックの設定（pre-commit で自動整形）
+
+- 目的: `git commit` 時に CSharpier と dotnet format を自動実行し、差分を自動ステージします。
+- セットアップ手順:
+
+```bash
+# リポジトリ直下で実行（Git Bash / WSL / macOS / Linux）
+bash scripts/install-git-hooks.sh
+```
+
+- これで Git の hooks パスが `.githooks` に設定され、`pre-commit` が有効化されます。
+- 補足:
+  - 初回は `dotnet tool restore` がフック内で走ります。オフライン環境ではスキップされる場合があります。
+  - 一時的にフックを無効化してコミットする場合は `git commit --no-verify` を使用してください。
+
 #### コミット規約
 ```bash
 # 機能追加

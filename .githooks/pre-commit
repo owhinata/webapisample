@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Format C# code before commit.
+# - Uses local dotnet tool CSharpier (printWidth=86)
+# - Uses dotnet format as a secondary pass
+
+if ! command -v dotnet >/dev/null 2>&1; then
+  echo "[pre-commit] dotnet is not installed; skipping formatting." >&2
+  exit 0
+fi
+
+# Restore local tools quietly (CSharpier). If offline, continue without failing.
+dotnet tool restore >/dev/null 2>&1 || true
+
+echo "[pre-commit] Running CSharpier..."
+dotnet csharpier format . || true
+
+echo "[pre-commit] Running dotnet format..."
+dotnet format MyAppNotificationHub -v minimal || true
+dotnet format MyWebApi -v minimal || true
+dotnet format MyAppMain -v minimal || true
+dotnet format MyAppMain.Tests -v minimal || true
+
+# Stage any changes produced by the formatters.
+git add -A
+
+exit 0
+
