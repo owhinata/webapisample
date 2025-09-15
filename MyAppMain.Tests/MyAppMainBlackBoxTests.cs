@@ -15,7 +15,8 @@ public class MyAppMainBlackBoxTests
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new TestIfUtility(tcs, null);
+        var util = new AppEventJunction();
+        util.StartRequested += json => tcs.TrySetResult(json);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -28,8 +29,7 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/start", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            Assert.AreEqual(body, received, "IfUtility.HandleStart argument mismatch");
-            Assert.AreEqual(1, util.StartCallCount, "HandleStart should be called once");
+            Assert.AreEqual(body, received, "Start JSON should be forwarded to observers");
         }
         finally
         {
@@ -40,7 +40,7 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
-        var util = new TestIfUtility(null, null);
+        var util = new AppEventJunction();
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -69,7 +69,8 @@ public class MyAppMainBlackBoxTests
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new TestIfUtility(null, tcs);
+        var util = new AppEventJunction();
+        util.EndRequested += json => tcs.TrySetResult(json);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -82,8 +83,7 @@ public class MyAppMainBlackBoxTests
             var res = await client.PostAsync("/v1/end", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
-            Assert.AreEqual(body, received, "IfUtility.HandleEnd argument mismatch");
-            Assert.AreEqual(1, util.EndCallCount, "HandleEnd should be called once");
+            Assert.AreEqual(body, received, "End JSON should be forwarded to observers");
         }
         finally
         {
@@ -117,8 +117,8 @@ public class MyAppMainBlackBoxTests
 
         // Create test utility that will capture the connection
         var connectionTcs = new TaskCompletionSource<TcpClient>();
-        var util = new TestIfUtilityWithTcpClient(connectionTcs);
-        var app = new global::MyAppMain.MyAppMain(util);
+        var utilWithTcp = new TestIfUtilityWithTcpClient(connectionTcs);
+        var app = new global::MyAppMain.MyAppMain(utilWithTcp.Junction);
         var apiPort = GetFreeTcpPort();
 
         try
@@ -161,61 +161,37 @@ public class MyAppMainBlackBoxTests
 
 
 
-class TestIfUtility : IfUtility
-{
-    private readonly TaskCompletionSource<string>? _startTcs;
-    private readonly TaskCompletionSource<string>? _endTcs;
-    public int StartCallCount { get; private set; }
-    public int EndCallCount { get; private set; }
-    public string? LastStartArg { get; private set; }
-    public string? LastEndArg { get; private set; }
-    public TestIfUtility(TaskCompletionSource<string>? startTcs, TaskCompletionSource<string>? endTcs)
-    { _startTcs = startTcs; _endTcs = endTcs; }
-    public override void HandleStart(string json)
-    {
-        StartCallCount++;
-        LastStartArg = json;
-        _startTcs?.TrySetResult(json);
-    }
-    public override void HandleEnd(string json)
-    {
-        EndCallCount++;
-        LastEndArg = json;
-        _endTcs?.TrySetResult(json);
-    }
-}
-
-class TestIfUtilityWithTcpClient : IfUtility
+class TestIfUtilityWithTcpClient
 {
     private readonly TaskCompletionSource<TcpClient> _connectionTcs;
+    public AppEventJunction Junction { get; } = new();
 
     public TestIfUtilityWithTcpClient(TaskCompletionSource<TcpClient> connectionTcs)
     {
         _connectionTcs = connectionTcs;
-    }
-
-    public override async void HandleStart(string json)
-    {
-        try
+        Junction.StartRequested += async json =>
         {
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("address", out var addressProp) &&
-                root.TryGetProperty("port", out var portProp))
+            try
             {
-                var address = addressProp.GetString();
-                var port = portProp.GetInt32();
+                var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
 
-                var tcpClient = new TcpClient();
-                await tcpClient.ConnectAsync(address!, port);
-                _connectionTcs.TrySetResult(tcpClient);
+                if (root.TryGetProperty("address", out var addressProp) &&
+                    root.TryGetProperty("port", out var portProp))
+                {
+                    var address = addressProp.GetString();
+                    var port = portProp.GetInt32();
+
+                    var tcpClient = new TcpClient();
+                    await tcpClient.ConnectAsync(address!, port);
+                    _connectionTcs.TrySetResult(tcpClient);
+                }
             }
-        }
-        catch (Exception ex)
-        {
-            _connectionTcs.TrySetException(ex);
-        }
+            catch (Exception ex)
+            {
+                _connectionTcs.TrySetException(ex);
+            }
+        };
     }
 }
 

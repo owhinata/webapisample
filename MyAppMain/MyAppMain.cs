@@ -13,17 +13,17 @@ public sealed class MyAppMain : IAsyncDisposable
 {
     private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
-    private readonly IfUtility _utility;
+    private readonly AppEventJunction _utility;
     private TcpClient? _tcpClient;
     private bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the MyAppMain class.
     /// </summary>
-    /// <param name="utility">Optional IfUtility instance. If null, a new instance will be created.</param>
-    public MyAppMain(IfUtility? utility = null)
+    /// <param name="utility">Optional event junction. If null, a new instance will be created.</param>
+    public MyAppMain(AppEventJunction? utility = null)
     {
-        _utility = utility ?? new IfUtility();
+        _utility = utility ?? new AppEventJunction();
         // Subscribe at construction time to avoid missing early POSTs right after Start.
         _host.StartRequested += OnStartMessageReceived;
         _host.EndRequested += OnEndMessageReceived;
