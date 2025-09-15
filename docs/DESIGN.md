@@ -126,6 +126,13 @@ app.Stop();
 - `MyAppNotificationHub`の結果イベント`StartCompleted/EndCompleted`を購読し`ModelResult`を検証
 - `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
+## IMU 連携の詳細設計
+
+IMU サーバとの TCP 連携プロトコル、NotificationHub への通知 DTO/イベント、
+およびテスト戦略の詳細は次を参照:
+
+- docs/IMU_DESIGN.md
+
 テスト例:
 
 ```csharp
