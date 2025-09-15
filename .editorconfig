@@ -1,0 +1,19 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 86
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Keep statements readable; prefer wrapping rather than long single lines
+csharp_preserve_single_line_statements = false
+csharp_preserve_single_line_blocks = true
+

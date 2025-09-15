@@ -17,12 +17,16 @@
 - Run individual projects: `dotnet run --project MyWebApi` or `dotnet run --project MyAppMain`.
 - Hot reload: `dotnet watch run` — rebuilds on file changes.
 - Unit tests: `dotnet test` — runs all test projects in the solution.
+- Formatting: `dotnet format` — honors `.editorconfig` (86-char lines). Note the
+  formatter does not reflow very long strings or comments; keep new edits within
+  86 chars and wrap manually when needed.
 
 ## Documentation
 - High-level architecture and integration notes live in `docs/DESIGN.md`.
 
 ## Coding Style & Naming Conventions
 - C#: 4-space indent, file-scoped namespaces, `nullable` enabled, implicit usings on (see `.csproj`).
+- Line length: keep lines within 86 characters (see `.editorconfig`).
 - Names: PascalCase for types/methods, camelCase for locals/parameters, interfaces prefixed `I`.
 - Files: one top-level type per file; group code by feature (e.g., `Weather/WeatherEndpoints.cs`).
 - APIs: prefer minimal APIs/route groups; keep routes kebab-case (e.g., `/weather-forecasts`).
