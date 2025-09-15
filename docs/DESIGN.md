@@ -12,7 +12,7 @@
   - グローバルレート制限を実装（1同時リクエスト、キューなし）
   - 成功時は200 OK、レート制限時は429 Too Many Requestsを返す
 - `MyAppMain` (新規)
-  - `MyWebApiHost`を`Start(int port)`/`Stop()`でラップするオーケストレーター
+- `MyWebApiHost`の`StartAsync(int port)`/`StopAsync()`を内部で呼び出すオーケストレーター（同期APIは`MyAppMain.Start/Stop`で提供）
   - `MyWebApi`イベントに購読し、TCP接続ロジックとIfUtilityメソッドを呼び出す
   - 直接TCP接続を管理し、JSONペイロードからサーバー情報を抽出する
 - `IfUtility` (既存)

@@ -5,13 +5,22 @@ using System.Text.Json;
 
 namespace MyAppMain;
 
-public sealed class MyAppMain : IDisposable
+/// <summary>
+/// Main application class that manages Web API host and TCP client connections.
+/// Provides event-based integration with start/end operations and TCP server connectivity.
+/// </summary>
+public sealed class MyAppMain : IAsyncDisposable
 {
+    private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
     private readonly IfUtility _utility;
     private TcpClient? _tcpClient;
     private bool _disposed;
 
+    /// <summary>
+    /// Initializes a new instance of the MyAppMain class.
+    /// </summary>
+    /// <param name="utility">Optional IfUtility instance. If null, a new instance will be created.</param>
     public MyAppMain(IfUtility? utility = null)
     {
         _utility = utility ?? new IfUtility();
@@ -20,16 +29,81 @@ public sealed class MyAppMain : IDisposable
         _host.EndRequested += OnEndMessageReceived;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the Web API host is currently running.
+    /// </summary>
     public bool IsRunning => _host.IsRunning;
+
+    /// <summary>
+    /// Gets a value indicating whether the TCP client is currently connected.
+    /// </summary>
     public bool IsConnected => _tcpClient?.Connected ?? false;
 
-    public void Start(int port) => _host.Start(port);
+    /// <summary>
+    /// Synchronously starts the Web API host on the specified port.
+    /// </summary>
+    /// <param name="port">The port number to listen on (1-65535).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if started successfully, false otherwise.</returns>
+    public bool Start(int port, CancellationToken cancellationToken = default)
+        => StartAsync(port, cancellationToken).GetAwaiter().GetResult();
 
-    public void Stop() => _host.Stop();
+    /// <summary>
+    /// Synchronously stops the Web API host.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if stopped successfully, false otherwise.</returns>
+    public bool Stop(CancellationToken cancellationToken = default)
+        => StopAsync(cancellationToken).GetAwaiter().GetResult();
 
-    // Event handlers wired to MyWebApiHost events
+    /// <summary>
+    /// Asynchronously starts the Web API host on the specified port.
+    /// </summary>
+    /// <param name="port">The port number to listen on (1-65535).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if started successfully, false otherwise.</returns>
+    public async Task<bool> StartAsync(int port, CancellationToken cancellationToken = default)
+    {
+        if (!IsValidPort(port))
+            return false;
+
+        lock (_lock)
+        {
+            if (_disposed)
+                return false;
+        }
+
+        return await _host.StartAsync(port, cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously stops the Web API host.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if stopped successfully, false otherwise.</returns>
+    public async Task<bool> StopAsync(CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+                return false;
+        }
+
+        return await _host.StopAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Event handler for start message received from Web API host.
+    /// Processes the JSON message and establishes TCP connection if address and port are provided.
+    /// </summary>
+    /// <param name="json">The JSON message containing connection details.</param>
     public void OnStartMessageReceived(string json)
     {
+        lock (_lock)
+        {
+            if (_disposed) return;
+        }
+
         // Call IfUtility first
         _utility.HandleStart(json);
 
@@ -45,7 +119,10 @@ public sealed class MyAppMain : IDisposable
                 var address = addressProp.GetString();
                 var port = portProp.GetInt32();
 
-                ConnectToTcpServer(address!, port);
+                if (!string.IsNullOrEmpty(address) && IsValidPort(port))
+                {
+                    ConnectToTcpServer(address, port);
+                }
             }
         }
         catch (Exception ex)
@@ -55,8 +132,18 @@ public sealed class MyAppMain : IDisposable
         }
     }
 
+    /// <summary>
+    /// Event handler for end message received from Web API host.
+    /// Processes the JSON message and disconnects from TCP server.
+    /// </summary>
+    /// <param name="json">The JSON message containing end details.</param>
     public void OnEndMessageReceived(string json)
     {
+        lock (_lock)
+        {
+            if (_disposed) return;
+        }
+
         // Call IfUtility first
         _utility.HandleEnd(json);
 
@@ -64,6 +151,33 @@ public sealed class MyAppMain : IDisposable
         DisconnectFromTcpServer();
     }
 
+    /// <summary>
+    /// Disposes the application asynchronously.
+    /// </summary>
+    /// <returns>A ValueTask representing the disposal operation.</returns>
+    public async ValueTask DisposeAsync()
+    {
+        await StopAsync();
+        CleanupResources();
+    }
+
+    #region Private Methods
+
+    /// <summary>
+    /// Validates that the port number is within valid range
+    /// </summary>
+    /// <param name="port">The port number to validate.</param>
+    /// <returns>True if the port is valid, false otherwise.</returns>
+    private static bool IsValidPort(int port)
+    {
+        return port > 0 && port <= 65535;
+    }
+
+    /// <summary>
+    /// Connects to a TCP server at the specified address and port.
+    /// </summary>
+    /// <param name="address">The server address to connect to.</param>
+    /// <param name="port">The server port to connect to.</param>
     private void ConnectToTcpServer(string address, int port)
     {
         try
@@ -82,6 +196,9 @@ public sealed class MyAppMain : IDisposable
         }
     }
 
+    /// <summary>
+    /// Disconnects from the current TCP server connection.
+    /// </summary>
     private void DisconnectFromTcpServer()
     {
         if (_tcpClient != null)
@@ -103,12 +220,18 @@ public sealed class MyAppMain : IDisposable
         }
     }
 
-    public void Dispose()
+    /// <summary>
+    /// Cleans up resources and unsubscribes from events.
+    /// </summary>
+    private void CleanupResources()
     {
         if (_disposed) return;
+
         _host.StartRequested -= OnStartMessageReceived;
         _host.EndRequested -= OnEndMessageReceived;
         DisconnectFromTcpServer();
         _disposed = true;
     }
+
+    #endregion
 }

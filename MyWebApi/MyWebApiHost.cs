@@ -35,22 +35,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
     /// </summary>
     public event Action<string>? EndRequested;
 
-    /// <summary>
-    /// Synchronously starts the Web API host on the specified port.
-    /// </summary>
-    /// <param name="port">The port number to listen on (1-65535).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if started successfully, false otherwise.</returns>
-    public bool Start(int port, CancellationToken cancellationToken = default)
-        => StartAsync(port, cancellationToken).GetAwaiter().GetResult();
-
-    /// <summary>
-    /// Synchronously stops the Web API host.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>True if stopped successfully, false otherwise.</returns>
-    public bool Stop(CancellationToken cancellationToken = default)
-        => StopAsync(cancellationToken).GetAwaiter().GetResult();
+    
 
     /// <summary>
     /// Asynchronously starts the Web API host on the specified port.

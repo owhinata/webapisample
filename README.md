@@ -94,6 +94,7 @@ webaipsv/
 - **疎結合**: デリゲートを使用した外部ライブラリとの統合
 - **レート制限**: 1同時接続制限でDDoS攻撃を防止
 - **バージョニング**: `/v1` ルートグループでAPIバージョン管理
+- **起動/停止API**: `MyWebApiHost` は `StartAsync/StopAsync` のみを公開（同期APIは `MyAppMain.Start/Stop` を利用）
 
 ### 主要ドキュメントの読書
 
@@ -154,8 +155,8 @@ dotnet run --project MyAppMain
 # ホットリロード付き実行
 dotnet watch run --project MyAppMain
 
-# 特定ポートで実行（コード内で指定）
-# app.Start(5008);
+# 特定ポートはコードで指定（MyAppMain.Start）
+# 例: var app = new MyAppMain.MyAppMain(); app.Start(5008);
 ```
 
 ---
@@ -309,8 +310,8 @@ dotnet --list-runtimes
 #### ポートが既に使用されている
 ```bash
 # 解決方法
-# コード内で異なるポートを指定
-app.Start(5009); // 5008の代わりに5009を使用
+# コード内で MyAppMain の Start に別ポートを指定
+// 例: app.Start(5009); // 5008の代わりに5009を使用
 ```
 
 #### ビルドエラー
