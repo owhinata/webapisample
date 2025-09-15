@@ -265,6 +265,13 @@ public sealed class MyAppMain : IAsyncDisposable
             _tcpClient = new TcpClient();
             _tcpClient.Connect(address, port);
             Console.WriteLine($"Connected to TCP server at {address}:{port}");
+            // Notify hub and start IMU read loop
+            var ep = _tcpClient.Client.RemoteEndPoint?.ToString();
+            _notificationHub?.NotifyImuConnected(
+                new MyAppNotificationHub.MyAppNotificationHub.ImuConnectionChangedDto(true, ep)
+            );
+            _imuCts = new CancellationTokenSource();
+            _imuTask = Task.Run(() => ImuReceiveLoopAsync(_imuCts.Token));
         }
         catch (Exception ex)
         {
@@ -283,8 +290,24 @@ public sealed class MyAppMain : IAsyncDisposable
         {
             try
             {
+                try
+                {
+                    _imuCts?.Cancel();
+                }
+                catch { }
+                try
+                {
+                    _imuTask?.Wait(100);
+                }
+                catch { }
                 _tcpClient.Close();
                 Console.WriteLine("Disconnected from TCP server");
+                _notificationHub?.NotifyImuDisconnected(
+                    new MyAppNotificationHub.MyAppNotificationHub.ImuConnectionChangedDto(
+                        false,
+                        null
+                    )
+                );
             }
             catch (Exception ex)
             {
@@ -294,6 +317,9 @@ public sealed class MyAppMain : IAsyncDisposable
             {
                 _tcpClient.Dispose();
                 _tcpClient = null;
+                _imuTask = null;
+                _imuCts?.Dispose();
+                _imuCts = null;
             }
         }
     }
@@ -419,6 +445,106 @@ public sealed class MyAppMain : IAsyncDisposable
             // Ignore parse errors; handled by caller via result
         }
         return (null, null);
+    }
+
+    // IMU protocol handling
+    private const byte MSG_IMU_STATE = 0x01;
+    private const byte MSG_IMU_DATA = 0x02;
+    private const byte MSG_SET_IMU_STATE = 0x81;
+
+    private CancellationTokenSource? _imuCts;
+    private Task? _imuTask;
+
+    private async Task ImuReceiveLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var stream = _tcpClient!.GetStream();
+            var header = new byte[5];
+            while (!ct.IsCancellationRequested)
+            {
+                await ReadExactAsync(stream, header, 0, header.Length, ct);
+                var id = header[0];
+                var len = BitConverter.ToUInt32(header, 1);
+                if (len > 1_000_000)
+                    throw new InvalidOperationException("Invalid payload size");
+                var payload = new byte[len];
+                if (len > 0)
+                    await ReadExactAsync(stream, payload, 0, (int)len, ct);
+
+                if (id == MSG_IMU_STATE)
+                {
+                    var state = payload.Length > 0 ? payload[0] : (byte)0;
+                    if (state == 1)
+                    {
+                        _notificationHub?.NotifyImuStateUpdated(
+                            new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(true)
+                        );
+                    }
+                    else
+                    {
+                        // OFF は通知せず、ON 要求を送る
+                        await SendImuOnOffRequestAsync(stream, true, ct);
+                    }
+                }
+                else if (id == MSG_IMU_DATA && len == 32)
+                {
+                    var ts = BitConverter.ToUInt64(payload, 0);
+                    var gx = BitConverter.ToSingle(payload, 8);
+                    var gy = BitConverter.ToSingle(payload, 12);
+                    var gz = BitConverter.ToSingle(payload, 16);
+                    var ax = BitConverter.ToSingle(payload, 20);
+                    var ay = BitConverter.ToSingle(payload, 24);
+                    var az = BitConverter.ToSingle(payload, 28);
+                    var dto = new MyAppNotificationHub.MyAppNotificationHub.ImuSampleDto(
+                        ts,
+                        new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(gx, gy, gz),
+                        new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(ax, ay, az)
+                    );
+                    _notificationHub?.NotifyImuSample(dto);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"IMU loop error: {ex.Message}");
+        }
+    }
+
+    private static async Task ReadExactAsync(
+        NetworkStream stream,
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken ct
+    )
+    {
+        var read = 0;
+        while (read < count)
+        {
+            var n = await stream.ReadAsync(buffer.AsMemory(offset + read, count - read), ct);
+            if (n == 0)
+                throw new IOException("Stream closed");
+            read += n;
+        }
+    }
+
+    private static async Task SendImuOnOffRequestAsync(
+        NetworkStream stream,
+        bool on,
+        CancellationToken ct
+    )
+    {
+        var header = new byte[5];
+        header[0] = MSG_SET_IMU_STATE;
+        BitConverter.TryWriteBytes(new Span<byte>(header, 1, 4), (uint)1);
+        var payload = new byte[] { (byte)(on ? 1 : 0) };
+        await stream.WriteAsync(header, 0, header.Length, ct);
+        await stream.WriteAsync(payload, 0, payload.Length, ct);
+        await stream.FlushAsync(ct);
     }
 
     private MyAppNotificationHub.ModelResult SuccessResult(

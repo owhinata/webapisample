@@ -47,4 +47,20 @@ public class MyAppNotificationHub
 
     public void NotifyEndCompleted(ModelResult result) =>
         EndCompleted?.Invoke(result);
+
+    // IMU notifications
+    public record ImuConnectionChangedDto(bool Connected, string? RemoteEndPoint);
+    public record ImuStateChangedDto(bool IsOn);
+    public record ImuVector3(float X, float Y, float Z);
+    public record ImuSampleDto(ulong TimestampNs, ImuVector3 Gyro, ImuVector3 Accel);
+
+    public event Action<ImuConnectionChangedDto>? ImuConnected;
+    public event Action<ImuConnectionChangedDto>? ImuDisconnected;
+    public event Action<ImuStateChangedDto>? ImuStateUpdated;
+    public event Action<ImuSampleDto>? ImuSampleReceived;
+
+    public void NotifyImuConnected(ImuConnectionChangedDto dto) => ImuConnected?.Invoke(dto);
+    public void NotifyImuDisconnected(ImuConnectionChangedDto dto) => ImuDisconnected?.Invoke(dto);
+    public void NotifyImuStateUpdated(ImuStateChangedDto dto) => ImuStateUpdated?.Invoke(dto);
+    public void NotifyImuSample(ImuSampleDto dto) => ImuSampleReceived?.Invoke(dto);
 }
