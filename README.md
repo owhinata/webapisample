@@ -75,9 +75,9 @@ webaipsv/
 ├── MyAppMain/             # オーケストレーター
 │   ├── MyAppMain.cs       # メインロジック
 │   └── MyAppMain.csproj   # プロジェクトファイル
-├── IfUtility/             # 共有ユーティリティ
-│   ├── IfUtility.cs       # ユーティリティ関数
-│   └── IfUtility.csproj   # プロジェクトファイル
+├── AppEventJunction/      # 外部通知用イベントジャンクション
+│   ├── AppEventJunction.cs       # ジャンクションクラス
+│   └── AppEventJunction.csproj   # プロジェクトファイル
 ├── MyAppMain.Tests/       # テストプロジェクト
 │   ├── MyAppMainBlackBoxTests.cs
 │   └── MyAppMain.Tests.csproj
@@ -124,7 +124,7 @@ dotnet build -c Release
 # 個別プロジェクトビルド
 dotnet build MyWebApi -c Release
 dotnet build MyAppMain -c Release
-dotnet build IfUtility -c Release
+dotnet build AppEventJunction -c Release
 ```
 
 ### テストの実行
@@ -220,7 +220,7 @@ curl -X POST http://localhost:5008/v1/start \
 dotnet format \
   MyWebApi/MyWebApi.csproj \
   MyAppMain/MyAppMain.csproj \
-  IfUtility/IfUtility.csproj \
+  AppEventJunction/AppEventJunction.csproj \
   MyAppMain.Tests/MyAppMain.Tests.csproj
 ```
 

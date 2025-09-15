@@ -22,7 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MyAppMain\MyAppMain.csproj" />
-    <ProjectReference Include="..\IfUtility\IfUtility.csproj" />
+    <ProjectReference Include="..\AppEventJunction\AppEventJunction.csproj" />
   </ItemGroup>
 
 </Project>

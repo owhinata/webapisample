@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
-using IfUtilityLib;
+using AppEventJunction;
 
 namespace MyAppMain.Tests;
 
@@ -15,7 +15,7 @@ public class MyAppMainBlackBoxTests
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new AppEventJunction();
+        var util = new AppEventJunction.AppEventJunction();
         util.StartRequested += json => tcs.TrySetResult(json);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
@@ -40,7 +40,7 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
-        var util = new AppEventJunction();
+        var util = new AppEventJunction.AppEventJunction();
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -69,7 +69,7 @@ public class MyAppMainBlackBoxTests
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new AppEventJunction();
+        var util = new AppEventJunction.AppEventJunction();
         util.EndRequested += json => tcs.TrySetResult(json);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
@@ -117,7 +117,7 @@ public class MyAppMainBlackBoxTests
 
         // Create test utility that will capture the connection
         var connectionTcs = new TaskCompletionSource<TcpClient>();
-        var utilWithTcp = new TestIfUtilityWithTcpClient(connectionTcs);
+        var utilWithTcp = new TestAppEventJunctionSubscriber(connectionTcs);
         var app = new global::MyAppMain.MyAppMain(utilWithTcp.Junction);
         var apiPort = GetFreeTcpPort();
 
@@ -161,12 +161,12 @@ public class MyAppMainBlackBoxTests
 
 
 
-class TestIfUtilityWithTcpClient
+class TestAppEventJunctionSubscriber
 {
     private readonly TaskCompletionSource<TcpClient> _connectionTcs;
-    public AppEventJunction Junction { get; } = new();
+    public AppEventJunction.AppEventJunction Junction { get; } = new();
 
-    public TestIfUtilityWithTcpClient(TaskCompletionSource<TcpClient> connectionTcs)
+    public TestAppEventJunctionSubscriber(TaskCompletionSource<TcpClient> connectionTcs)
     {
         _connectionTcs = connectionTcs;
         Junction.StartRequested += async json =>

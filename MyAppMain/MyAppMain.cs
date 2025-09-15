@@ -1,5 +1,5 @@
 using MyWebApi;
-using IfUtilityLib;
+using AppEventJunction;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -13,17 +13,17 @@ public sealed class MyAppMain : IAsyncDisposable
 {
     private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
-    private readonly AppEventJunction _utility;
+    private readonly AppEventJunction.AppEventJunction? _junction;
     private TcpClient? _tcpClient;
     private bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the MyAppMain class.
     /// </summary>
-    /// <param name="utility">Optional event junction. If null, a new instance will be created.</param>
-    public MyAppMain(AppEventJunction? utility = null)
+    /// <param name="junction">Optional event junction. If null, events are not raised.</param>
+    public MyAppMain(AppEventJunction.AppEventJunction? junction = null)
     {
-        _utility = utility ?? new AppEventJunction();
+        _junction = junction;
         // Subscribe at construction time to avoid missing early POSTs right after Start.
         _host.StartRequested += OnStartMessageReceived;
         _host.EndRequested += OnEndMessageReceived;
@@ -104,8 +104,8 @@ public sealed class MyAppMain : IAsyncDisposable
             if (_disposed) return;
         }
 
-        // Call IfUtility first
-        _utility.HandleStart(json);
+        // Notify observers via junction if provided
+        _junction?.HandleStart(json);
 
         // Then handle TCP connection directly
         try
@@ -144,8 +144,8 @@ public sealed class MyAppMain : IAsyncDisposable
             if (_disposed) return;
         }
 
-        // Call IfUtility first
-        _utility.HandleEnd(json);
+        // Notify observers via junction if provided
+        _junction?.HandleEnd(json);
 
         // Then handle TCP disconnection
         DisconnectFromTcpServer();

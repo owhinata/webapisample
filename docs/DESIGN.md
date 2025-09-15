@@ -1,4 +1,4 @@
-# 設計: MyWebApi + MyAppMain + IfUtility
+# 設計: MyWebApi + MyAppMain + AppEventJunction
 
 ## 目標
 - 既存の`MyWebApi`を中心としたライブラリ群でPOSTリクエストに対するアプリケーションロジックを実行する
@@ -11,13 +11,15 @@
   - 生のPOSTボディ文字列でイベントを発生させる
   - グローバルレート制限を実装（1同時リクエスト、キューなし）
   - 成功時は200 OK、レート制限時は429 Too Many Requestsを返す
-- `MyAppMain` (新規)
+- `MyAppMain`
 - `MyWebApiHost`の`StartAsync(int port)`/`StopAsync()`を内部で呼び出すオーケストレーター（同期APIは`MyAppMain.Start/Stop`で提供）
-  - `MyWebApi`イベントに購読し、TCP接続ロジックとIfUtilityメソッドを呼び出す
+  - `MyWebApi`イベントに購読し、TCP接続ロジックを実行
+  - 外部通知が必要な場合は `AppEventJunction` に同期的に通知（任意）
   - 直接TCP接続を管理し、JSONペイロードからサーバー情報を抽出する
-- `IfUtility` (既存)
-  - 現在は空の実装（将来の拡張用）
-  - テスト用のサブクラス化をサポートする仮想メソッドを提供
+- `AppEventJunction`
+  - `StartRequested(string json)` / `EndRequested(string json)` の同期イベントを提供
+  - `HandleStart/HandleEnd` 呼び出しで登録済みイベントを同期発火
+  - 非同期化が必要なら、購読側で委譲（`Task.Run` など）
 
 ## パブリック契約
 MyWebApiの型との結合を避けるため、イベントとデリゲートは生のJSON文字列を使用する。
@@ -38,7 +40,7 @@ public event Action<string>? EndRequested;   // 生のボディ
 2. Minimal APIがボディを文字列として読み取る
 3. `MyWebApiHost`が生のJSON文字列で`StartRequested`/`EndRequested`を発生させる
 4. `MyAppMain`の購読済みハンドラーが呼び出される：
-   - まず`IfUtility.HandleStart`/`HandleEnd`を呼び出し
+   - 必要に応じて`AppEventJunction.HandleStart/HandleEnd`を呼び出し（同期イベントを外部へ）
    - JSONからアドレスとポートを抽出してTCP接続を確立/切断
 
 ## MyAppMainの責任
@@ -46,20 +48,20 @@ public event Action<string>? EndRequested;   // 生のボディ
   - `Start(int port)`: イベントに購読し、指定されたポートで`MyWebApiHost`を開始
   - `Stop()`: `MyWebApiHost`を停止し、ハンドラーの購読を解除
 - 統合ポイント:
-  - コンストラクターで`IfUtility`インスタンスを受け取る（デフォルトで新規作成）
+  - コンストラクターで`AppEventJunction`インスタンスを任意で受け取る（省略時は通知なし）
   - イベントハンドラー内でTCP接続ロジックを直接実装
   - JSONペイロードからサーバー情報を抽出してTCP接続を管理
 
 使用例:
 
 ```csharp
-// デフォルトのIfUtilityを使用
+// デフォルト（通知なし）
 var app = new MyAppMain();
 app.Start(5008);
 
-// またはカスタムのIfUtilityを注入
-var customUtility = new TestIfUtility();
-var app2 = new MyAppMain(customUtility);
+// またはジャンクションを注入（UIなどが購読）
+var junction = new AppEventJunction.AppEventJunction();
+var app2 = new MyAppMain(junction);
 app2.Start(5008);
 
 // 停止
@@ -69,7 +71,7 @@ app.Stop();
 ## 依存関係の境界
 - `MyAppMain`はASP.NET Coreの抽象化を参照しない（`IServiceCollection`、`WebApplication`などなし）
 - 調整はイベントとプレーンDTOのみで行われる
-- `IfUtility`は変更されない；`MyAppMain`に注入されたインスタンスを通じて呼び出される
+- `AppEventJunction`は同期イベントを提供；`MyAppMain`に注入された場合のみ呼び出す
 - TCP接続ロジックは`MyAppMain`内に直接実装されている
 
 ## バージョニング
@@ -78,8 +80,8 @@ app.Stop();
 ## テスト戦略（ブラックボックス）
 - テストプロジェクト`MyAppMain.Tests`はMSTestを使用
 - `MyAppMain`を空いているポートで開始
-- 呼び出されたときに`TaskCompletionSource<string>`を完了するフェイクのIfUtilityを注入
-- `HttpClient`を使用して`/v1/start`と`/v1/end`にPOSTし、フェイクが呼び出され期待されるJSONを含むことをアサート
+- `AppEventJunction`のイベントを購読し、`TaskCompletionSource<string>`で検証
+- `HttpClient`を使用して`/v1/start`と`/v1/end`にPOSTし、受信したJSONを検証
 - `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
 テスト例:
@@ -89,8 +91,9 @@ app.Stop();
 public async Task Posting_Start_Triggers_External_Handler()
 {
     var startTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var testUtility = new TestIfUtility { OnStart = json => startTcs.SetResult(json) };
-    var app = new MyAppMain(testUtility);
+    var junction = new AppEventJunction.AppEventJunction();
+    junction.StartRequested += json => startTcs.TrySetResult(json);
+    var app = new MyAppMain(junction);
     var port = GetFreePort();
     try
     {
@@ -123,4 +126,4 @@ public async Task Posting_Start_Triggers_External_Handler()
 - ハンドラーが長時間実行される場合のバックプレッシャー/キューイング
 - 構造化ログと診断イベント
 - TCP接続の永続化と再接続ロジック
-- IfUtilityの具体的な実装とビジネスロジックの追加
+- UI購読者の具体化とビジネスロジックの追加

@@ -1,4 +1,4 @@
-namespace IfUtilityLib;
+namespace AppEventJunction;
 
 /// <summary>
 /// AppEventJunction acts as a synchronous event junction between MyAppMain
