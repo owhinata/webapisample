@@ -1,0 +1,5 @@
+{
+  "$schema": "https://raw.githubusercontent.com/belav/csharpier/main/schema/csharpierrc.schema.json",
+  "printWidth": 86
+}
+

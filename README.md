@@ -204,6 +204,8 @@ curl -X POST http://localhost:5008/v1/start \
 - **インデント**: 4スペース
 - **名前空間**: ファイルスコープ名前空間
 - **行長**: 1行は最大86文字（`.editorconfig`で設定。長文は手動で改行）
+- **フォーマッタ**: CSharpier（printWidth=86、`.csharpierrc.json`）。`dotnet format`は
+  補助として併用可能（自動折返しはCSharpierが担当）。
 - **命名規則**: 
   - PascalCase: 型、メソッド、プロパティ、イベント
   - camelCase: ローカル変数、パラメータ
@@ -220,6 +222,11 @@ curl -X POST http://localhost:5008/v1/start \
 #### コミット前の準備
 ```bash
 # コードフォーマット（コミット前に必ず実行）
+# 1) CSharpier（自動折返しを含む）
+dotnet tool restore
+dotnet csharpier format .
+
+# 2) dotnet format（Roserlynベースの補助整形）
 dotnet format \
   MyWebApi/MyWebApi.csproj \
   MyAppMain/MyAppMain.csproj \
