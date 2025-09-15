@@ -268,7 +268,10 @@ public sealed class MyAppMain : IAsyncDisposable
             // Notify hub and start IMU read loop
             var ep = _tcpClient.Client.RemoteEndPoint?.ToString();
             _notificationHub?.NotifyImuConnected(
-                new MyAppNotificationHub.MyAppNotificationHub.ImuConnectionChangedDto(true, ep)
+                new MyAppNotificationHub.MyAppNotificationHub.ImuConnectionChangedDto(
+                    true,
+                    ep
+                )
             );
             _imuCts = new CancellationTokenSource();
             _imuTask = Task.Run(() => ImuReceiveLoopAsync(_imuCts.Token));
@@ -387,7 +390,12 @@ public sealed class MyAppMain : IAsyncDisposable
             else
             {
                 return new ValueTask<MyAppNotificationHub.ModelResult>(
-                    ErrorResult(cmd.ControllerId, cmd.Type, "Unknown command type", cmd.CorrelationId)
+                    ErrorResult(
+                        cmd.ControllerId,
+                        cmd.Type,
+                        "Unknown command type",
+                        cmd.CorrelationId
+                    )
                 );
             }
         }
@@ -478,7 +486,9 @@ public sealed class MyAppMain : IAsyncDisposable
                     if (state == 1)
                     {
                         _notificationHub?.NotifyImuStateUpdated(
-                            new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(true)
+                            new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(
+                                true
+                            )
                         );
                     }
                     else
@@ -496,18 +506,25 @@ public sealed class MyAppMain : IAsyncDisposable
                     var ax = BitConverter.ToSingle(payload, 20);
                     var ay = BitConverter.ToSingle(payload, 24);
                     var az = BitConverter.ToSingle(payload, 28);
-                    var dto = new MyAppNotificationHub.MyAppNotificationHub.ImuSampleDto(
-                        ts,
-                        new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(gx, gy, gz),
-                        new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(ax, ay, az)
-                    );
+                    var dto =
+                        new MyAppNotificationHub.MyAppNotificationHub.ImuSampleDto(
+                            ts,
+                            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(
+                                gx,
+                                gy,
+                                gz
+                            ),
+                            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(
+                                ax,
+                                ay,
+                                az
+                            )
+                        );
                     _notificationHub?.NotifyImuSample(dto);
                 }
             }
         }
-        catch (OperationCanceledException)
-        {
-        }
+        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
             Console.WriteLine($"IMU loop error: {ex.Message}");
@@ -525,7 +542,10 @@ public sealed class MyAppMain : IAsyncDisposable
         var read = 0;
         while (read < count)
         {
-            var n = await stream.ReadAsync(buffer.AsMemory(offset + read, count - read), ct);
+            var n = await stream.ReadAsync(
+                buffer.AsMemory(offset + read, count - read),
+                ct
+            );
             if (n == 0)
                 throw new IOException("Stream closed");
             read += n;

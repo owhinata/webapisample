@@ -148,13 +148,29 @@ public class MyAppMainBlackBoxTests
 
         // Create hub and event waiters
         var hub2 = new MyAppNotificationHub.MyAppNotificationHub();
-        var startDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var connected = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var imuOn = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var imuSample = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        hub2.StartCompleted += res => { if (res.Success) startDone.TrySetResult(true); };
+        var startDone = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var connected = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var imuOn = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var imuSample = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        hub2.StartCompleted += res =>
+        {
+            if (res.Success)
+                startDone.TrySetResult(true);
+        };
         hub2.ImuConnected += _ => connected.TrySetResult(true);
-        hub2.ImuStateUpdated += dto => { if (dto.IsOn) imuOn.TrySetResult(true); };
+        hub2.ImuStateUpdated += dto =>
+        {
+            if (dto.IsOn)
+                imuOn.TrySetResult(true);
+        };
         hub2.ImuSampleReceived += _ => imuSample.TrySetResult(true);
         var app = new global::MyAppMain.MyAppMain(hub2);
         var apiPort = GetFreeTcpPort();
@@ -210,12 +226,21 @@ class TestImuServer : IDisposable
 
     private async Task AcceptLoopAsync(CancellationToken ct)
     {
-        if (_listener == null) throw new InvalidOperationException("Server not started");
+        if (_listener == null)
+            throw new InvalidOperationException("Server not started");
         while (!ct.IsCancellationRequested)
         {
             var client = await _listener.AcceptTcpClientAsync(ct);
-            lock (_clients) { _clients.Add(client); _streams.Add(client.GetStream()); }
-            await SendImuStateAsync(client.GetStream(), _imuOn ? (byte)1 : (byte)0, ct);
+            lock (_clients)
+            {
+                _clients.Add(client);
+                _streams.Add(client.GetStream());
+            }
+            await SendImuStateAsync(
+                client.GetStream(),
+                _imuOn ? (byte)1 : (byte)0,
+                ct
+            );
             _ = Task.Run(() => ClientRecvLoopAsync(client, ct));
         }
     }
@@ -232,7 +257,8 @@ class TestImuServer : IDisposable
                 var id = header[0];
                 var len = BitConverter.ToUInt32(header, 1);
                 var payload = new byte[len];
-                if (len > 0) await ReadExactAsync(s, payload, 0, (int)len, ct);
+                if (len > 0)
+                    await ReadExactAsync(s, payload, 0, (int)len, ct);
                 if (id == 0x81)
                 {
                     var newOn = payload[0] == 1;
@@ -250,10 +276,17 @@ class TestImuServer : IDisposable
     private async Task BroadcastStateAsync(CancellationToken ct)
     {
         List<NetworkStream> streams;
-        lock (_clients) { streams = _streams.ToList(); }
+        lock (_clients)
+        {
+            streams = _streams.ToList();
+        }
         foreach (var s in streams)
         {
-            try { await SendImuStateAsync(s, _imuOn ? (byte)1 : (byte)0, ct); } catch { }
+            try
+            {
+                await SendImuStateAsync(s, _imuOn ? (byte)1 : (byte)0, ct);
+            }
+            catch { }
         }
     }
 
@@ -266,7 +299,9 @@ class TestImuServer : IDisposable
             {
                 buf[0] = 0x02; // IMU_DATA
                 BitConverter.TryWriteBytes(new Span<byte>(buf, 1, 4), (uint)32);
-                var ts = (ulong)(DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds * 1_000_000UL;
+                var ts =
+                    (ulong)(DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds
+                    * 1_000_000UL;
                 BitConverter.TryWriteBytes(new Span<byte>(buf, 5, 8), ts);
                 BitConverter.TryWriteBytes(new Span<byte>(buf, 13, 4), 0.1f);
                 BitConverter.TryWriteBytes(new Span<byte>(buf, 17, 4), 0.2f);
@@ -275,46 +310,93 @@ class TestImuServer : IDisposable
                 BitConverter.TryWriteBytes(new Span<byte>(buf, 29, 4), 2.0f);
                 BitConverter.TryWriteBytes(new Span<byte>(buf, 33, 4), 3.0f);
                 List<NetworkStream> streams;
-                lock (_clients) { streams = _streams.ToList(); }
+                lock (_clients)
+                {
+                    streams = _streams.ToList();
+                }
                 foreach (var s in streams)
                 {
-                    try { await s.WriteAsync(buf, 0, buf.Length, ct); await s.FlushAsync(ct); } catch { }
+                    try
+                    {
+                        await s.WriteAsync(buf, 0, buf.Length, ct);
+                        await s.FlushAsync(ct);
+                    }
+                    catch { }
                 }
             }
             await Task.Delay(10, ct); // ~100Hz
         }
     }
 
-    private static async Task SendImuStateAsync(NetworkStream s, byte state, CancellationToken ct)
+    private static async Task SendImuStateAsync(
+        NetworkStream s,
+        byte state,
+        CancellationToken ct
+    )
     {
-        byte[] header = new byte[5]; header[0] = 0x01;
+        byte[] header = new byte[5];
+        header[0] = 0x01;
         BitConverter.TryWriteBytes(new Span<byte>(header, 1, 4), (uint)1);
         await s.WriteAsync(header, 0, 5, ct);
         await s.WriteAsync(new[] { state }, 0, 1, ct);
         await s.FlushAsync(ct);
     }
 
-    private static async Task ReadExactAsync(NetworkStream s, byte[] buf, int ofs, int count, CancellationToken ct)
+    private static async Task ReadExactAsync(
+        NetworkStream s,
+        byte[] buf,
+        int ofs,
+        int count,
+        CancellationToken ct
+    )
     {
         var read = 0;
         while (read < count)
         {
             var n = await s.ReadAsync(buf.AsMemory(ofs + read, count - read), ct);
-            if (n == 0) throw new IOException("closed");
+            if (n == 0)
+                throw new IOException("closed");
             read += n;
         }
     }
 
     public void Dispose()
     {
-        try { _cts.Cancel(); } catch { }
-        try { _broadcaster?.Wait(100); } catch { }
+        try
+        {
+            _cts.Cancel();
+        }
+        catch { }
+        try
+        {
+            _broadcaster?.Wait(100);
+        }
+        catch { }
         lock (_clients)
         {
-            foreach (var s in _streams) { try { s.Close(); } catch { } }
-            foreach (var c in _clients) { try { c.Close(); } catch { } }
-            _streams.Clear(); _clients.Clear();
+            foreach (var s in _streams)
+            {
+                try
+                {
+                    s.Close();
+                }
+                catch { }
+            }
+            foreach (var c in _clients)
+            {
+                try
+                {
+                    c.Close();
+                }
+                catch { }
+            }
+            _streams.Clear();
+            _clients.Clear();
         }
-        try { _listener?.Stop(); } catch { }
+        try
+        {
+            _listener?.Stop();
+        }
+        catch { }
     }
 }

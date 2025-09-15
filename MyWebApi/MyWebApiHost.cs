@@ -57,7 +57,10 @@ public sealed class MyWebApiHost : IAsyncDisposable
                 return false;
         }
 
-        var options = new WebApplicationOptions { ContentRootPath = AppContext.BaseDirectory };
+        var options = new WebApplicationOptions
+        {
+            ContentRootPath = AppContext.BaseDirectory,
+        };
 
         WebApplication? app = null;
         CancellationTokenSource? linkedCts = null;
