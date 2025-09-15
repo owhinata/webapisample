@@ -4,7 +4,7 @@
 - Root: Contains three main projects:
   - `MyWebApi/`: Self-hosted Web API with rate limiting (`MyWebApiHost.cs`)
   - `MyAppMain/`: Main application entry point
-  - `AppEventJunction/`: Event junction library for external notifications
+  - `MyAppNotificationHub/`: Event notification hub library
 - MyWebApi features:
   - Event-based integration via `StartRequested`/`EndRequested` events
   - Versioned endpoints under `/v1` route group (`/v1/start`, `/v1/end`)

@@ -12,12 +12,12 @@ public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
         _host = host;
         _port = port;
         Id = id ?? $"webapi:{port}";
-        _host.StartRequested += body => CommandRequested?.Invoke(new AppEventJunction.ModelCommand(Id, "start", body, null, DateTimeOffset.UtcNow));
-        _host.EndRequested += body => CommandRequested?.Invoke(new AppEventJunction.ModelCommand(Id, "end", body, null, DateTimeOffset.UtcNow));
+        _host.StartRequested += body => CommandRequested?.Invoke(new MyAppNotificationHub.ModelCommand(Id, "start", body, null, DateTimeOffset.UtcNow));
+        _host.EndRequested += body => CommandRequested?.Invoke(new MyAppNotificationHub.ModelCommand(Id, "end", body, null, DateTimeOffset.UtcNow));
     }
 
     public string Id { get; }
-    public event Action<AppEventJunction.ModelCommand>? CommandRequested;
+    public event Action<MyAppNotificationHub.ModelCommand>? CommandRequested;
 
     public Task<bool> StartAsync(CancellationToken ct = default)
         => _host.StartAsync(_port, ct);

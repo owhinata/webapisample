@@ -3,7 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>AppEventJunction</AssemblyName>
-    <RootNamespace>AppEventJunction</RootNamespace>
+    <AssemblyName>MyAppNotificationHub</AssemblyName>
+    <RootNamespace>MyAppNotificationHub</RootNamespace>
   </PropertyGroup>
 </Project>

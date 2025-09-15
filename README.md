@@ -75,9 +75,9 @@ webaipsv/
 ├── MyAppMain/             # オーケストレーター
 │   ├── MyAppMain.cs       # メインロジック
 │   └── MyAppMain.csproj   # プロジェクトファイル
-├── AppEventJunction/      # 外部通知用イベントジャンクション
-│   ├── AppEventJunction.cs       # ジャンクションクラス
-│   └── AppEventJunction.csproj   # プロジェクトファイル
+├── MyAppNotificationHub/  # 外部通知用イベントハブ
+│   ├── MyAppNotificationHub.cs   # ハブクラス
+│   └── MyAppNotificationHub.csproj # プロジェクトファイル
 ├── MyAppMain.Tests/       # テストプロジェクト
 │   ├── MyAppMainBlackBoxTests.cs
 │   └── MyAppMain.Tests.csproj
@@ -90,9 +90,9 @@ webaipsv/
 ```
 
 #### 🏗️ アーキテクチャ概要
-- **MVC構成**: Controller（WebAPI ほか拡張可）/ Model（MyAppMain）/ View（AppEventJunction購読者）
+- **MVC構成**: Controller（WebAPI ほか拡張可）/ Model（MyAppMain）/ View（MyAppNotificationHub購読者）
 - **複数コントローラ対応**: 将来的にCLIやMQ等のコントローラ追加が可能
-- **処理結果通知**: モデル処理完了後にのみ`AppEventJunction`経由でビューへ通知
+- **処理結果通知**: モデル処理完了後にのみ`MyAppNotificationHub`経由でビューへ通知
 - **コンテキスト分離**: コントローラ処理とビュー通知は別スレッドで分離
 - **レート制限**: 1同時接続制限でDDoS攻撃を防止
 - **バージョニング**: `/v1` ルートグループでAPIバージョン管理
@@ -126,7 +126,7 @@ dotnet build -c Release
 # 個別プロジェクトビルド
 dotnet build MyWebApi -c Release
 dotnet build MyAppMain -c Release
-dotnet build AppEventJunction -c Release
+dotnet build MyAppNotificationHub -c Release
 ```
 
 ### テストの実行
@@ -222,7 +222,7 @@ curl -X POST http://localhost:5008/v1/start \
 dotnet format \
   MyWebApi/MyWebApi.csproj \
   MyAppMain/MyAppMain.csproj \
-  AppEventJunction/AppEventJunction.csproj \
+  MyAppNotificationHub/MyAppNotificationHub.csproj \
   MyAppMain.Tests/MyAppMain.Tests.csproj
 ```
 

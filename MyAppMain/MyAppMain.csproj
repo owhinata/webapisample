@@ -6,6 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MyWebApi/MyWebApi.csproj" />
-    <ProjectReference Include="../AppEventJunction/AppEventJunction.csproj" />
+    <ProjectReference Include="../MyAppNotificationHub/MyAppNotificationHub.csproj" />
   </ItemGroup>
 </Project>

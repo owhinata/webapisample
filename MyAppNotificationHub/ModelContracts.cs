@@ -1,4 +1,4 @@
-namespace AppEventJunction;
+namespace MyAppNotificationHub;
 
 public record ModelCommand(
     string ControllerId,
@@ -15,4 +15,3 @@ public record ModelResult(
     object? Payload,
     string? CorrelationId,
     DateTimeOffset CompletedAt);
-

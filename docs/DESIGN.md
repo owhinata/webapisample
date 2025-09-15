@@ -14,7 +14,7 @@
   - 受け取ったコマンドを処理し`ModelResult`を生成
   - TCP接続/切断などアプリの中核ロジックを担う
   - 複数コントローラを登録/開始/停止できる
-- View（AppEventJunction購読者）
+- View（MyAppNotificationHub購読者）
   - モデル処理の「結果」を受け取り、UI等に反映
   - 通知は別スレッドから同期イベントで発火（非同期化は購読側に委譲）
 
@@ -50,9 +50,9 @@ public record ModelResult(
     DateTimeOffset CompletedAt);
 ```
 
-`AppEventJunction`は「結果通知」のイベントを提供する。
+`MyAppNotificationHub`は「結果通知」のイベントを提供する。
 ```csharp
-public sealed class AppEventJunction
+public sealed class MyAppNotificationHub
 {
     public event Action<ModelResult>? StartCompleted; // 同期イベント
     public event Action<ModelResult>? EndCompleted;   // 同期イベント
@@ -63,7 +63,7 @@ public sealed class AppEventJunction
 1. コントローラが外部入力を受け取り`ModelCommand`を発火
 2. `MyAppMain`はコマンドを受理して非同期ワーカーで処理
 3. 処理完了後に`ModelResult`を生成
-4. 専用の通知ディスパッチャが`AppEventJunction`のイベントを同期発火（UIなどが購読）
+4. 専用の通知ディスパッチャが`MyAppNotificationHub`のイベントを同期発火（UIなどが購読）
 
 ## MyAppMainの責任
 - ライフサイクル管理:
@@ -82,7 +82,7 @@ var app = new MyAppMain();
 app.Start(5008);
 
 // ビュー（UI）を購読させる
-var junction = new AppEventJunction.AppEventJunction();
+var junction = new MyAppNotificationHub.MyAppNotificationHub();
 junction.StartCompleted += result => {/* 更新処理 */};
 var app2 = new MyAppMain(junction);
 app2.Start(5008);
@@ -94,7 +94,7 @@ app.Stop();
 ## 依存関係の境界
 - `MyAppMain`はASP.NET Coreの抽象化を参照しない（`IServiceCollection`、`WebApplication`などなし）
 - 調整はイベントとプレーンDTOのみで行われる
-- `AppEventJunction`は同期イベントを提供；`MyAppMain`に注入された場合のみ呼び出す
+- `MyAppNotificationHub`は同期イベントを提供；`MyAppMain`に注入された場合のみ呼び出す
 - TCP接続ロジックは`MyAppMain`内に直接実装されている
 
 ## バージョニング
@@ -104,7 +104,7 @@ app.Stop();
 - テストプロジェクト`MyAppMain.Tests`はMSTestを使用
 - `MyAppMain`を空いているポートで開始
 - コントローラ（WebAPI）経由でコマンド送信
-- `AppEventJunction`の結果イベント`StartCompleted/EndCompleted`を購読し`ModelResult`を検証
+- `MyAppNotificationHub`の結果イベント`StartCompleted/EndCompleted`を購読し`ModelResult`を検証
 - `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
 テスト例:
@@ -114,7 +114,7 @@ app.Stop();
 public async Task Posting_Start_Triggers_External_Handler()
 {
     var startTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var junction = new AppEventJunction.AppEventJunction();
+    var junction = new MyAppNotificationHub.MyAppNotificationHub();
     junction.StartRequested += json => startTcs.TrySetResult(json);
     var app = new MyAppMain(junction);
     var port = GetFreePort();

@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
-using AppEventJunction;
+using MyAppNotificationHub;
 
 namespace MyAppMain.Tests;
 
@@ -14,8 +14,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
-        var tcs = new TaskCompletionSource<AppEventJunction.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new AppEventJunction.AppEventJunction();
+        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var util = new MyAppNotificationHub.MyAppNotificationHub();
         util.StartCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
@@ -41,7 +41,7 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
-        var util = new AppEventJunction.AppEventJunction();
+        var util = new MyAppNotificationHub.MyAppNotificationHub();
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
 
@@ -69,8 +69,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
-        var tcs = new TaskCompletionSource<AppEventJunction.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new AppEventJunction.AppEventJunction();
+        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var util = new MyAppNotificationHub.MyAppNotificationHub();
         util.EndCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(util);
         var port = GetFreeTcpPort();
@@ -118,7 +118,7 @@ public class MyAppMainBlackBoxTests
         var serverPort = testServer.Start();
 
         // Create junction to receive completion events
-        var junction = new AppEventJunction.AppEventJunction();
+        var junction = new MyAppNotificationHub.MyAppNotificationHub();
         var startDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         junction.StartCompleted += res => { if (res.Success) startDone.TrySetResult(true); };
         var app = new global::MyAppMain.MyAppMain(junction);

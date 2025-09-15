@@ -1,5 +1,5 @@
 using MyWebApi;
-using AppEventJunction;
+using MyAppNotificationHub;
 using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -14,10 +14,10 @@ public sealed class MyAppMain : IAsyncDisposable
 {
     private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
-    private readonly AppEventJunction.AppEventJunction? _junction;
+    private readonly MyAppNotificationHub.MyAppNotificationHub? _junction;
     private readonly List<IAppController> _controllers = new();
-    private Channel<AppEventJunction.ModelCommand>? _commandChannel;
-    private Channel<AppEventJunction.ModelResult>? _notifyChannel;
+    private Channel<MyAppNotificationHub.ModelCommand>? _commandChannel;
+    private Channel<MyAppNotificationHub.ModelResult>? _notifyChannel;
     private CancellationTokenSource? _cts;
     private Task? _processorTask;
     private Task? _notifierTask;
@@ -27,8 +27,8 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <summary>
     /// Initializes a new instance of the MyAppMain class.
     /// </summary>
-    /// <param name="junction">Optional event junction. If null, events are not raised.</param>
-    public MyAppMain(AppEventJunction.AppEventJunction? junction = null)
+    /// <param name="junction">Optional event hub. If null, events are not raised.</param>
+    public MyAppMain(MyAppNotificationHub.MyAppNotificationHub? junction = null)
     {
         _junction = junction;
         // Controllers are registered explicitly; default WebAPI controller is created on Start(port).
@@ -81,8 +81,8 @@ public sealed class MyAppMain : IAsyncDisposable
         if (_cts is not null) return false; // already started
 
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _commandChannel = Channel.CreateUnbounded<AppEventJunction.ModelCommand>();
-        _notifyChannel = Channel.CreateUnbounded<AppEventJunction.ModelResult>();
+        _commandChannel = Channel.CreateUnbounded<MyAppNotificationHub.ModelCommand>();
+        _notifyChannel = Channel.CreateUnbounded<MyAppNotificationHub.ModelResult>();
 
         // Start background processor and notifier to separate contexts
         _processorTask = Task.Run(() => ProcessCommandsAsync(_cts.Token));
@@ -159,7 +159,7 @@ public sealed class MyAppMain : IAsyncDisposable
             if (_disposed) return;
         }
         // Enqueue as command when using direct subscription (legacy path)
-        _commandChannel?.Writer.TryWrite(new AppEventJunction.ModelCommand("webapi:legacy", "start", json, null, DateTimeOffset.UtcNow));
+        _commandChannel?.Writer.TryWrite(new MyAppNotificationHub.ModelCommand("webapi:legacy", "start", json, null, DateTimeOffset.UtcNow));
     }
 
     /// <summary>
@@ -173,7 +173,7 @@ public sealed class MyAppMain : IAsyncDisposable
         {
             if (_disposed) return;
         }
-        _commandChannel?.Writer.TryWrite(new AppEventJunction.ModelCommand("webapi:legacy", "end", json, null, DateTimeOffset.UtcNow));
+        _commandChannel?.Writer.TryWrite(new MyAppNotificationHub.ModelCommand("webapi:legacy", "end", json, null, DateTimeOffset.UtcNow));
     }
 
     public void RegisterController(IAppController controller)
@@ -268,7 +268,7 @@ public sealed class MyAppMain : IAsyncDisposable
         var reader = _commandChannel!.Reader;
         while (!ct.IsCancellationRequested)
         {
-            AppEventJunction.ModelCommand cmd;
+            MyAppNotificationHub.ModelCommand cmd;
             try
             {
                 if (!await reader.WaitToReadAsync(ct)) break;
@@ -281,7 +281,7 @@ public sealed class MyAppMain : IAsyncDisposable
         }
     }
 
-    private async Task<AppEventJunction.ModelResult> HandleCommandAsync(AppEventJunction.ModelCommand cmd, CancellationToken ct)
+    private async Task<MyAppNotificationHub.ModelResult> HandleCommandAsync(MyAppNotificationHub.ModelCommand cmd, CancellationToken ct)
     {
         try
         {
@@ -299,21 +299,21 @@ public sealed class MyAppMain : IAsyncDisposable
                         ConnectToTcpServer(address!, port);
                     }
                 }
-                return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
+                return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
             }
             else if (cmd.Type == "end")
             {
                 DisconnectFromTcpServer();
-                return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
+                return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, true, null, new { Connected = IsConnected }, cmd.CorrelationId, DateTimeOffset.UtcNow);
             }
             else
             {
-                return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, false, "Unknown command type", null, cmd.CorrelationId, DateTimeOffset.UtcNow);
+                return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, false, "Unknown command type", null, cmd.CorrelationId, DateTimeOffset.UtcNow);
             }
         }
         catch (Exception ex)
         {
-            return new AppEventJunction.ModelResult(cmd.ControllerId, cmd.Type, false, ex.Message, null, cmd.CorrelationId, DateTimeOffset.UtcNow);
+            return new MyAppNotificationHub.ModelResult(cmd.ControllerId, cmd.Type, false, ex.Message, null, cmd.CorrelationId, DateTimeOffset.UtcNow);
         }
     }
 
@@ -322,7 +322,7 @@ public sealed class MyAppMain : IAsyncDisposable
         var reader = _notifyChannel!.Reader;
         while (!ct.IsCancellationRequested)
         {
-            AppEventJunction.ModelResult res;
+            MyAppNotificationHub.ModelResult res;
             try
             {
                 if (!await reader.WaitToReadAsync(ct)) break;

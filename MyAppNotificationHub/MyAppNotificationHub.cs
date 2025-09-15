@@ -1,13 +1,13 @@
-namespace AppEventJunction;
+namespace MyAppNotificationHub;
 
 /// <summary>
-/// AppEventJunction acts as a synchronous event junction between MyAppMain
+/// MyAppNotificationHub acts as a synchronous notification hub between MyAppMain
 /// and external observers (e.g., UI/View). MyAppMain calls HandleStart/End,
 /// which synchronously invoke corresponding events for subscribers.
 /// If asynchronous processing is needed, subscribers should offload work
 /// on their side.
 /// </summary>
-public class AppEventJunction
+public class MyAppNotificationHub
 {
     // Result notifications (preferred for MVC)
     public event Action<ModelResult>? StartCompleted;
