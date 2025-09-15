@@ -14,7 +14,7 @@ public sealed class MyAppMain : IAsyncDisposable
 {
     private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
-    private readonly MyAppNotificationHub.MyAppNotificationHub? _junction;
+    private readonly MyAppNotificationHub.MyAppNotificationHub? _notificationHub;
     private readonly List<IAppController> _controllers = new();
     private Channel<MyAppNotificationHub.ModelCommand>? _commandChannel;
     private Channel<MyAppNotificationHub.ModelResult>? _notifyChannel;
@@ -27,10 +27,10 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <summary>
     /// Initializes a new instance of the MyAppMain class.
     /// </summary>
-    /// <param name="junction">Optional event hub. If null, events are not raised.</param>
-    public MyAppMain(MyAppNotificationHub.MyAppNotificationHub? junction = null)
+    /// <param name="notificationHub">Optional event hub. If null, events are not raised.</param>
+    public MyAppMain(MyAppNotificationHub.MyAppNotificationHub? notificationHub = null)
     {
-        _junction = junction;
+        _notificationHub = notificationHub;
         // Controllers are registered explicitly; default WebAPI controller is created on Start(port).
     }
 
@@ -331,9 +331,9 @@ public sealed class MyAppMain : IAsyncDisposable
             catch (OperationCanceledException) { break; }
 
             if (res.Type == "start")
-                _junction?.NotifyStartCompleted(res);
+                _notificationHub?.NotifyStartCompleted(res);
             else if (res.Type == "end")
-                _junction?.NotifyEndCompleted(res);
+                _notificationHub?.NotifyEndCompleted(res);
         }
     }
 

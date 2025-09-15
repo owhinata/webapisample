@@ -15,9 +15,9 @@ public class MyAppMainBlackBoxTests
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
         var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new MyAppNotificationHub.MyAppNotificationHub();
-        util.StartCompleted += result => tcs.TrySetResult(result);
-        var app = new global::MyAppMain.MyAppMain(util);
+        var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        hub.StartCompleted += result => tcs.TrySetResult(result);
+        var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
 
         try
@@ -41,8 +41,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
-        var util = new MyAppNotificationHub.MyAppNotificationHub();
-        var app = new global::MyAppMain.MyAppMain(util);
+        var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
 
         try
@@ -70,9 +70,9 @@ public class MyAppMainBlackBoxTests
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
         var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var util = new MyAppNotificationHub.MyAppNotificationHub();
-        util.EndCompleted += result => tcs.TrySetResult(result);
-        var app = new global::MyAppMain.MyAppMain(util);
+        var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        hub.EndCompleted += result => tcs.TrySetResult(result);
+        var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
 
         try
@@ -118,10 +118,10 @@ public class MyAppMainBlackBoxTests
         var serverPort = testServer.Start();
 
         // Create junction to receive completion events
-        var junction = new MyAppNotificationHub.MyAppNotificationHub();
+        var hub2 = new MyAppNotificationHub.MyAppNotificationHub();
         var startDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        junction.StartCompleted += res => { if (res.Success) startDone.TrySetResult(true); };
-        var app = new global::MyAppMain.MyAppMain(junction);
+        hub2.StartCompleted += res => { if (res.Success) startDone.TrySetResult(true); };
+        var app = new global::MyAppMain.MyAppMain(hub2);
         var apiPort = GetFreeTcpPort();
 
         try
