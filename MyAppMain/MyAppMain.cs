@@ -483,17 +483,15 @@ public sealed class MyAppMain : IAsyncDisposable
                 if (id == MSG_IMU_STATE)
                 {
                     var state = payload.Length > 0 ? payload[0] : (byte)0;
-                    if (state == 1)
+                    var isOn = state == 1;
+                    _notificationHub?.NotifyImuStateUpdated(
+                        new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(
+                            isOn
+                        )
+                    );
+                    if (!isOn)
                     {
-                        _notificationHub?.NotifyImuStateUpdated(
-                            new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(
-                                true
-                            )
-                        );
-                    }
-                    else
-                    {
-                        // OFF は通知せず、ON 要求を送る
+                        // OFF 状態でも通知は済ませた上で ON 要求を送る
                         await SendImuOnOffRequestAsync(stream, true, ct);
                     }
                 }
