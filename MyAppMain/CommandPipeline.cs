@@ -20,6 +20,11 @@ internal sealed class CommandPipeline : IAsyncDisposable
     private Task? _processorTask;
     private Task? _dispatcherTask;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CommandPipeline"/> class.
+    /// </summary>
+    /// <param name="handler">Handler used to execute incoming commands.</param>
+    /// <param name="notificationHub">Hub notified when results are produced.</param>
     public CommandPipeline(
         CommandHandler handler,
         MyAppNotificationHub.MyAppNotificationHub? notificationHub
@@ -29,6 +34,10 @@ internal sealed class CommandPipeline : IAsyncDisposable
         _notificationHub = notificationHub;
     }
 
+    /// <summary>
+    /// Starts background processing for commands and notifications.
+    /// </summary>
+    /// <param name="token">Cancellation token linked to the application lifecycle.</param>
     public void Start(CancellationToken token)
     {
         if (_cts is not null)
@@ -46,6 +55,10 @@ internal sealed class CommandPipeline : IAsyncDisposable
         );
     }
 
+    /// <summary>
+    /// Stops background processing and waits for inflight work to complete.
+    /// </summary>
+    /// <param name="cancellationToken">Optional token controlling the wait.</param>
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
         var cts = _cts;
@@ -77,9 +90,17 @@ internal sealed class CommandPipeline : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Attempts to enqueue a command for processing.
+    /// </summary>
+    /// <param name="command">Command to enqueue.</param>
+    /// <returns><c>true</c> if the command was accepted; otherwise <c>false</c>.</returns>
     public bool TryWriteCommand(MyAppNotificationHub.ModelCommand command) =>
         _commandChannel.Writer.TryWrite(command);
 
+    /// <summary>
+    /// Disposes the pipeline and stops the background workers.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         await StopAsync();

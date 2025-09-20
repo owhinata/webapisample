@@ -268,6 +268,12 @@ public sealed class MyAppMain : IAsyncDisposable
         _disposed = true;
     }
 
+    /// <summary>
+    /// Cancels startup and rolls back any controllers that have already started.
+    /// </summary>
+    /// <param name="linkedCts">Cancellation source governing the startup operations.</param>
+    /// <param name="startedControllers">Controllers that were successfully started.</param>
+    /// <param name="stopToken">Token used while stopping controllers and the pipeline.</param>
     private async Task HandleStartFailureAsync(
         CancellationTokenSource linkedCts,
         IReadOnlyCollection<IAppController> startedControllers,

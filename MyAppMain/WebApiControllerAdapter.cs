@@ -2,11 +2,20 @@ using MyWebApi;
 
 namespace MyAppMain;
 
+/// <summary>
+/// Bridges <see cref="MyWebApiHost"/> events to the <see cref="IAppController"/> abstraction.
+/// </summary>
 public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
 {
     private readonly MyWebApiHost _host;
     private readonly int _port;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="WebApiControllerAdapter"/> class.
+    /// </summary>
+    /// <param name="host">Underlying Web API host.</param>
+    /// <param name="port">Port the host listens on.</param>
+    /// <param name="id">Optional controller identifier.</param>
     public WebApiControllerAdapter(MyWebApiHost host, int port, string? id = null)
     {
         _host = host;
@@ -34,15 +43,25 @@ public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
             );
     }
 
+    /// <summary>
+    /// Gets the controller identifier.
+    /// </summary>
     public string Id { get; }
+
+    /// <summary>
+    /// Raised when a command is produced by the underlying host.
+    /// </summary>
     public event Action<MyAppNotificationHub.ModelCommand>? CommandRequested;
 
+    /// <inheritdoc />
     public Task<bool> StartAsync(CancellationToken ct = default) =>
         _host.StartAsync(_port, ct);
 
+    /// <inheritdoc />
     public Task<bool> StopAsync(CancellationToken ct = default) =>
         _host.StopAsync(ct);
 
+    /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         await _host.StopAsync();

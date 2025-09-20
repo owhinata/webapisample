@@ -9,8 +9,14 @@ namespace MyAppNotificationHub;
 /// </summary>
 public class MyAppNotificationHub
 {
-    // Result notifications (preferred for MVC)
+    /// <summary>
+    /// Raised when a start command finishes processing.
+    /// </summary>
     public event Action<ModelResult>? StartCompleted;
+
+    /// <summary>
+    /// Raised when an end command finishes processing.
+    /// </summary>
     public event Action<ModelResult>? EndCompleted;
 
     /// <summary>
@@ -42,34 +48,79 @@ public class MyAppNotificationHub
     }
 
     // Public helpers for model to raise results
+    /// <summary>
+    /// Notifies subscribers that a start command has completed.
+    /// </summary>
     public void NotifyStartCompleted(ModelResult result) =>
         StartCompleted?.Invoke(result);
 
+    /// <summary>
+    /// Notifies subscribers that an end command has completed.
+    /// </summary>
     public void NotifyEndCompleted(ModelResult result) =>
         EndCompleted?.Invoke(result);
 
     // IMU notifications
+    /// <summary>
+    /// Describes an IMU connection state change.
+    /// </summary>
     public record ImuConnectionChangedDto(bool Connected, string? RemoteEndPoint);
 
+    /// <summary>
+    /// Describes an IMU on/off transition.
+    /// </summary>
     public record ImuStateChangedDto(bool IsOn);
 
+    /// <summary>
+    /// Represents a three dimensional vector value.
+    /// </summary>
     public record ImuVector3(float X, float Y, float Z);
 
+    /// <summary>
+    /// Carries a single IMU sample.
+    /// </summary>
     public record ImuSampleDto(ulong TimestampNs, ImuVector3 Gyro, ImuVector3 Accel);
 
+    /// <summary>
+    /// Raised when the IMU connection is established.
+    /// </summary>
     public event Action<ImuConnectionChangedDto>? ImuConnected;
+
+    /// <summary>
+    /// Raised when the IMU connection is dropped.
+    /// </summary>
     public event Action<ImuConnectionChangedDto>? ImuDisconnected;
+
+    /// <summary>
+    /// Raised when the IMU on/off state changes.
+    /// </summary>
     public event Action<ImuStateChangedDto>? ImuStateUpdated;
+
+    /// <summary>
+    /// Raised when a new IMU sample is available.
+    /// </summary>
     public event Action<ImuSampleDto>? ImuSampleReceived;
 
+    /// <summary>
+    /// Notifies subscribers that the IMU connection has been established.
+    /// </summary>
     public void NotifyImuConnected(ImuConnectionChangedDto dto) =>
         ImuConnected?.Invoke(dto);
 
+    /// <summary>
+    /// Notifies subscribers that the IMU connection has been closed.
+    /// </summary>
     public void NotifyImuDisconnected(ImuConnectionChangedDto dto) =>
         ImuDisconnected?.Invoke(dto);
 
+    /// <summary>
+    /// Notifies subscribers of an IMU state change.
+    /// </summary>
     public void NotifyImuStateUpdated(ImuStateChangedDto dto) =>
         ImuStateUpdated?.Invoke(dto);
 
+    /// <summary>
+    /// Notifies subscribers of a new IMU sample.
+    /// </summary>
     public void NotifyImuSample(ImuSampleDto dto) => ImuSampleReceived?.Invoke(dto);
 }

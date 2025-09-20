@@ -96,6 +96,10 @@ public sealed class MyWebApiHost : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Registers the global rate limiter used by the host.
+    /// </summary>
+    /// <param name="services">Service collection used to configure the limiter.</param>
     private static void ConfigureRateLimiter(IServiceCollection services)
     {
         services.AddRateLimiter(o =>
@@ -115,6 +119,10 @@ public sealed class MyWebApiHost : IAsyncDisposable
         });
     }
 
+    /// <summary>
+    /// Maps the versioned API endpoints exposed by the host.
+    /// </summary>
+    /// <param name="app">Web application instance.</param>
     private void MapV1Endpoints(WebApplication app)
     {
         var v1 = app.MapGroup("/v1");
@@ -232,7 +240,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Cleans up resources in case of failure
+    /// Disposes intermediate resources when startup fails.
     /// </summary>
     private static async Task CleanupResourcesAsync(
         WebApplication? app,

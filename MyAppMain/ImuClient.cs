@@ -21,11 +21,20 @@ internal sealed class ImuClient : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _receiverTask;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ImuClient"/> class.
+    /// </summary>
+    /// <param name="notificationHub">
+    /// Optional hub that receives IMU connection and data notifications.
+    /// </param>
     public ImuClient(MyAppNotificationHub.MyAppNotificationHub? notificationHub)
     {
         _notificationHub = notificationHub;
     }
 
+    /// <summary>
+    /// Gets a value indicating whether a TCP connection to the IMU server is active.
+    /// </summary>
     public bool IsConnected
     {
         get
@@ -37,6 +46,11 @@ internal sealed class ImuClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Connects to the specified IMU server and begins streaming data.
+    /// </summary>
+    /// <param name="address">Remote server address.</param>
+    /// <param name="port">Remote server port.</param>
     public void Connect(string address, int port)
     {
         lock (_sync)
@@ -71,6 +85,9 @@ internal sealed class ImuClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Terminates the IMU connection if active.
+    /// </summary>
     public void Disconnect()
     {
         lock (_sync)
@@ -79,6 +96,9 @@ internal sealed class ImuClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Disposes the client and releases the underlying TCP connection.
+    /// </summary>
     public void Dispose()
     {
         Disconnect();

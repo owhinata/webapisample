@@ -5,15 +5,27 @@ using MyAppNotificationHub;
 
 namespace MyAppMain;
 
+/// <summary>
+/// Translates high-level model commands into IMU operations and results.
+/// </summary>
 internal sealed class CommandHandler
 {
     private readonly ImuClient _imuClient;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CommandHandler"/> class.
+    /// </summary>
+    /// <param name="imuClient">IMU client used to manage connections.</param>
     public CommandHandler(ImuClient imuClient)
     {
         _imuClient = imuClient;
     }
 
+    /// <summary>
+    /// Executes the supplied <see cref="ModelCommand"/> and returns the resulting model state.
+    /// </summary>
+    /// <param name="command">Command emitted by a controller.</param>
+    /// <returns>Completion result describing the outcome.</returns>
     public ValueTask<ModelResult> HandleAsync(ModelCommand command)
     {
         try
