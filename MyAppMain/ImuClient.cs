@@ -101,45 +101,7 @@ internal sealed class ImuClient : IDisposable
                 if (len > 0)
                     await ReadExactAsync(stream, payload, 0, (int)len, ct);
 
-                if (id == MsgImuState)
-                {
-                    var state = payload.Length > 0 ? payload[0] : (byte)0;
-                    var isOn = state == 1;
-                    _notificationHub?.NotifyImuStateUpdated(
-                        new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(
-                            isOn
-                        )
-                    );
-                    if (!isOn)
-                    {
-                        await SendImuOnOffRequestAsync(stream, true, ct);
-                    }
-                }
-                else if (id == MsgImuData && len == 32)
-                {
-                    var ts = BitConverter.ToUInt64(payload, 0);
-                    var gx = BitConverter.ToSingle(payload, 8);
-                    var gy = BitConverter.ToSingle(payload, 12);
-                    var gz = BitConverter.ToSingle(payload, 16);
-                    var ax = BitConverter.ToSingle(payload, 20);
-                    var ay = BitConverter.ToSingle(payload, 24);
-                    var az = BitConverter.ToSingle(payload, 28);
-                    var dto =
-                        new MyAppNotificationHub.MyAppNotificationHub.ImuSampleDto(
-                            ts,
-                            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(
-                                gx,
-                                gy,
-                                gz
-                            ),
-                            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(
-                                ax,
-                                ay,
-                                az
-                            )
-                        );
-                    _notificationHub?.NotifyImuSample(dto);
-                }
+                await ProcessMessageAsync(stream, id, payload, ct);
             }
         }
         catch (OperationCanceledException)
@@ -150,6 +112,60 @@ internal sealed class ImuClient : IDisposable
         {
             Console.WriteLine($"IMU loop error: {ex.Message}");
         }
+    }
+
+    private async Task ProcessMessageAsync(
+        NetworkStream stream,
+        byte messageId,
+        byte[] payload,
+        CancellationToken ct
+    )
+    {
+        switch (messageId)
+        {
+            case MsgImuState:
+                await HandleStateMessageAsync(stream, payload, ct);
+                break;
+            case MsgImuData when payload.Length == 32:
+                HandleDataMessage(payload);
+                break;
+            default:
+                break;
+        }
+    }
+
+    private async Task HandleStateMessageAsync(
+        NetworkStream stream,
+        byte[] payload,
+        CancellationToken ct
+    )
+    {
+        var state = payload.Length > 0 ? payload[0] : (byte)0;
+        var isOn = state == 1;
+        _notificationHub?.NotifyImuStateUpdated(
+            new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(isOn)
+        );
+        if (!isOn)
+        {
+            await SendImuOnOffRequestAsync(stream, true, ct);
+        }
+    }
+
+    private void HandleDataMessage(byte[] payload)
+    {
+        var ts = BitConverter.ToUInt64(payload, 0);
+        var gx = BitConverter.ToSingle(payload, 8);
+        var gy = BitConverter.ToSingle(payload, 12);
+        var gz = BitConverter.ToSingle(payload, 16);
+        var ax = BitConverter.ToSingle(payload, 20);
+        var ay = BitConverter.ToSingle(payload, 24);
+        var az = BitConverter.ToSingle(payload, 28);
+        var dto = new MyAppNotificationHub.MyAppNotificationHub.ImuSampleDto(
+            ts,
+            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(gx, gy, gz),
+            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(ax, ay, az)
+        );
+        _notificationHub?.NotifyImuSample(dto);
     }
 
     private void DisconnectInternal()
