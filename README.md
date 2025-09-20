@@ -19,7 +19,7 @@ dotnet --version
 winget install Microsoft.DotNet.SDK.8
 
 # インストール（macOS）
-brew install --cask dotnet-sdk
+brew install dotnet@8
 
 # インストール（Linux）
 wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
