@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using MyWebApi;
+using NotificationHub = MyAppNotificationHub.MyAppNotificationHub;
 
 namespace MyAppMain;
 
@@ -13,7 +14,7 @@ public sealed class MyAppMain : IAsyncDisposable
 {
     private readonly object _lock = new();
     private readonly MyWebApiHost _host = new();
-    private readonly MyAppNotificationHub.MyAppNotificationHub? _notificationHub;
+    private readonly NotificationHub? _notificationHub;
     private readonly List<IAppController> _controllers = new();
     private readonly ImuClient _imuClient;
     private readonly CommandHandler _commandHandler;
@@ -27,9 +28,7 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <param name="notificationHub">
     /// Optional event hub. If null, events are not raised.
     /// </param>
-    public MyAppMain(
-        MyAppNotificationHub.MyAppNotificationHub? notificationHub = null
-    )
+    public MyAppMain(NotificationHub? notificationHub = null)
     {
         _notificationHub = notificationHub;
         _imuClient = new ImuClient(notificationHub);
