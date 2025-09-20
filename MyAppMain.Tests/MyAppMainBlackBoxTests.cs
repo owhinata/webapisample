@@ -16,12 +16,13 @@ namespace MyAppMain.Tests;
 [TestClass]
 public class MyAppMainBlackBoxTests
 {
+    /// <summary>
+    /// Verifies single start request invokes the hub and returns success.
+    /// </summary>
     [TestMethod]
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
-        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        var tcs = NewTcs<MyAppNotificationHub.ModelResult>();
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
         hub.StartCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(hub);
@@ -29,6 +30,7 @@ public class MyAppMainBlackBoxTests
 
         try
         {
+            // Arrange HTTP client against the hosted Web API.
             app.Start(port);
             using var client = new HttpClient
             {
@@ -36,8 +38,12 @@ public class MyAppMainBlackBoxTests
             };
             var body = "{\"message\":\"hello\"}";
             var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+            // Act
             var res = await client.PostAsync("/v1/start", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
+
+            // Assert hub callback fires with success metadata.
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
             Assert.AreEqual("start", received.Type);
             Assert.IsTrue(received.Success);
@@ -48,16 +54,15 @@ public class MyAppMainBlackBoxTests
         }
     }
 
+    /// <summary>
+    /// Ensures parallel start calls yield one 200 and one 429 via rate limiting.
+    /// </summary>
     [TestMethod]
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
-        var firstRequestEntered = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        var releaseFirstRequest = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        var firstRequestEntered = NewTcs<bool>();
+        var releaseFirstRequest = NewTcs<bool>();
         var gateFlag = 0;
         var app = new global::MyAppMain.MyAppMain(hub);
         var hostField = typeof(global::MyAppMain.MyAppMain).GetField(
@@ -78,6 +83,7 @@ public class MyAppMainBlackBoxTests
 
         try
         {
+            // Spin up Web API and two clients to issue concurrent requests.
             app.Start(port);
             using var client1 = new HttpClient
             {
@@ -95,6 +101,7 @@ public class MyAppMainBlackBoxTests
             );
             await WaitAsync(firstRequestEntered.Task, TimeSpan.FromSeconds(1));
 
+            // Second request should be throttled while first is active.
             var t2 = client2.PostAsync(
                 "/v1/start",
                 new StringContent(body2, Encoding.UTF8, "application/json")
@@ -116,6 +123,7 @@ public class MyAppMainBlackBoxTests
 
             var responses = await Task.WhenAll(t1, t2);
             var codes = responses.Select(r => r.StatusCode).ToArray();
+
             Assert.IsTrue(
                 codes.Contains(HttpStatusCode.OK),
                 "One request should succeed"
@@ -132,12 +140,13 @@ public class MyAppMainBlackBoxTests
         }
     }
 
+    /// <summary>
+    /// Verifies end request triggers hub notification and returns success.
+    /// </summary>
     [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
-        var tcs = new TaskCompletionSource<MyAppNotificationHub.ModelResult>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        var tcs = NewTcs<MyAppNotificationHub.ModelResult>();
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
         hub.EndCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(hub);
@@ -152,8 +161,12 @@ public class MyAppMainBlackBoxTests
             };
             var body = "{\"message\":\"bye\"}";
             var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+            // Act
             var res = await client.PostAsync("/v1/end", content);
             Assert.AreEqual(HttpStatusCode.OK, res.StatusCode);
+
+            // Assert end notification reaches the hub.
             var received = await WaitAsync(tcs.Task, TimeSpan.FromSeconds(3));
             Assert.AreEqual("end", received.Type);
             Assert.IsTrue(received.Success);
@@ -176,6 +189,9 @@ public class MyAppMainBlackBoxTests
         throw new TimeoutException("Timed out waiting for delegate invocation");
     }
 
+    private static TaskCompletionSource<T> NewTcs<T>() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private static int GetFreeTcpPort()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -185,6 +201,9 @@ public class MyAppMainBlackBoxTests
         return port;
     }
 
+    /// <summary>
+    /// Validates full IMU startup flow reaches connected, ON, and sample events.
+    /// </summary>
     [TestMethod]
     public async Task Start_Message_With_Server_Info_Connects_To_TCP_Server()
     {
@@ -194,22 +213,12 @@ public class MyAppMainBlackBoxTests
 
         // Create hub and event waiters
         var hub2 = new MyAppNotificationHub.MyAppNotificationHub();
-        var startDone = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        var connected = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        var startDone = NewTcs<bool>();
+        var connected = NewTcs<bool>();
         var imuOnObserved = false;
-        var imuOn = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        var imuSample = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        var sampleBeforeOn = new TaskCompletionSource<bool>(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        var imuOn = NewTcs<bool>();
+        var imuSample = NewTcs<bool>();
+        var sampleBeforeOn = NewTcs<bool>();
         var stateNotifications = new List<bool>();
         hub2.StartCompleted += res =>
         {
@@ -234,6 +243,7 @@ public class MyAppMainBlackBoxTests
         {
             if (!imuOnObserved)
             {
+                // Guard: samples must not precede an ON state.
                 sampleBeforeOn.TrySetResult(true);
                 return;
             }
@@ -245,6 +255,7 @@ public class MyAppMainBlackBoxTests
 
         try
         {
+            // Arrange API client and point to the synthetic IMU server.
             app.Start(apiPort);
             using var client = new HttpClient
             {
