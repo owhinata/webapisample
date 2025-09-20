@@ -88,7 +88,8 @@ public sealed class MyAppNotificationHub
 - ライフサイクル管理:
   - `Start(int port)`/`Stop()`: 互換APIを維持しつつ、登録済みコントローラを起動/停止
 - コマンド処理:
-  - `Channel<ModelCommand>`で受信し、`CommandHandler` に委譲して検証→内部処理（TCP接続/切断など）→結果生成
+  - `CommandPipeline` が `Channel<ModelCommand>` のバックグラウンド処理と通知ディスパッチを担当
+  - `CommandHandler` に委譲して検証→内部処理（TCP接続/切断など）→結果生成
 - 通知:
   - 処理完了後にのみ`ModelResult`を通知（生JSONの直接通知は行わない）
   - 通知は専用ディスパッチャ経由で発火し、コントローラの処理スレッドから分離

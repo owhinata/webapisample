@@ -72,6 +72,8 @@
   - 切断時は `ImuDisconnected` を通知
 - 送信ヘルパー
   - `ImuClient` が `SET_IMU_STATE` を送信（`SendImuOnOffRequest` 相当）
+- チャネル処理
+  - `CommandPipeline` が非同期チャネル (`Channel<ModelCommand>`/`Channel<ModelResult>`) を処理し、結果を `MyAppNotificationHub` へ通知
 - 安全性
   - ストリーム読み取りは `ReadExactAsync` で所定バイト数を必ず読む
   - 例外はループを終了し切断へ

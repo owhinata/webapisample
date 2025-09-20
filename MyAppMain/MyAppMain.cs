@@ -1,4 +1,5 @@
-using System.Threading.Channels;
+using System.Collections.Generic;
+using System.Linq;
 using MyWebApi;
 
 namespace MyAppMain;
@@ -16,11 +17,8 @@ public sealed class MyAppMain : IAsyncDisposable
     private readonly List<IAppController> _controllers = new();
     private readonly ImuClient _imuClient;
     private readonly CommandHandler _commandHandler;
-    private Channel<MyAppNotificationHub.ModelCommand>? _commandChannel;
-    private Channel<MyAppNotificationHub.ModelResult>? _notifyChannel;
+    private readonly CommandPipeline _commandPipeline;
     private CancellationTokenSource? _cts;
-    private Task? _processorTask;
-    private Task? _notifierTask;
     private bool _disposed;
 
     /// <summary>
@@ -36,6 +34,7 @@ public sealed class MyAppMain : IAsyncDisposable
         _notificationHub = notificationHub;
         _imuClient = new ImuClient(notificationHub);
         _commandHandler = new CommandHandler(_imuClient);
+        _commandPipeline = new CommandPipeline(_commandHandler, notificationHub);
         // Controllers are registered explicitly; default WebAPI controller is
         // created on Start(port).
     }
@@ -90,14 +89,11 @@ public sealed class MyAppMain : IAsyncDisposable
         if (_cts is not null)
             return false; // already started
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _commandChannel =
-            Channel.CreateUnbounded<MyAppNotificationHub.ModelCommand>();
-        _notifyChannel = Channel.CreateUnbounded<MyAppNotificationHub.ModelResult>();
-
-        // Start background processor and notifier to separate contexts
-        _processorTask = Task.Run(() => ProcessCommandsAsync(_cts.Token));
-        _notifierTask = Task.Run(() => DispatchNotificationsAsync(_cts.Token));
+        var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken
+        );
+        _cts = linkedCts;
+        _commandPipeline.Start(linkedCts.Token);
 
         // If no controllers registered, add default WebAPI controller for the
         // given port
@@ -107,15 +103,36 @@ public sealed class MyAppMain : IAsyncDisposable
             RegisterController(adapter);
         }
 
-        // Start all controllers
-        foreach (var c in _controllers)
-        {
-            var ok = await c.StartAsync(_cts.Token);
-            if (!ok)
-                return false;
-        }
+        var startedControllers = new List<IAppController>();
 
-        return true;
+        try
+        {
+            foreach (var controller in _controllers)
+            {
+                var ok = await controller.StartAsync(linkedCts.Token);
+                if (!ok)
+                {
+                    await HandleStartFailureAsync(
+                        linkedCts,
+                        startedControllers,
+                        cancellationToken
+                    );
+                    return false;
+                }
+                startedControllers.Add(controller);
+            }
+
+            return true;
+        }
+        catch
+        {
+            await HandleStartFailureAsync(
+                linkedCts,
+                startedControllers,
+                cancellationToken
+            );
+            throw;
+        }
     }
 
     /// <summary>
@@ -139,6 +156,8 @@ public sealed class MyAppMain : IAsyncDisposable
                 return false;
             cts.Cancel();
 
+            await _commandPipeline.StopAsync(cancellationToken);
+
             // Stop all controllers
             foreach (var c in _controllers)
             {
@@ -149,28 +168,12 @@ public sealed class MyAppMain : IAsyncDisposable
                 catch { }
             }
 
-            // Wait for workers
-            if (_processorTask is not null)
-                try
-                {
-                    await _processorTask;
-                }
-                catch { }
-            if (_notifierTask is not null)
-                try
-                {
-                    await _notifierTask;
-                }
-                catch { }
-
             _imuClient.Disconnect();
             return true;
         }
         finally
         {
             cts?.Dispose();
-            _commandChannel = null;
-            _notifyChannel = null;
         }
     }
 
@@ -188,7 +191,7 @@ public sealed class MyAppMain : IAsyncDisposable
                 return;
         }
         // Enqueue as command when using direct subscription (legacy path)
-        _commandChannel?.Writer.TryWrite(
+        _commandPipeline.TryWriteCommand(
             new MyAppNotificationHub.ModelCommand(
                 "webapi:legacy",
                 "start",
@@ -211,7 +214,7 @@ public sealed class MyAppMain : IAsyncDisposable
             if (_disposed)
                 return;
         }
-        _commandChannel?.Writer.TryWrite(
+        _commandPipeline.TryWriteCommand(
             new MyAppNotificationHub.ModelCommand(
                 "webapi:legacy",
                 "end",
@@ -227,7 +230,7 @@ public sealed class MyAppMain : IAsyncDisposable
         if (controller == null)
             throw new ArgumentNullException(nameof(controller));
         _controllers.Add(controller);
-        controller.CommandRequested += cmd => _commandChannel?.Writer.TryWrite(cmd);
+        controller.CommandRequested += cmd => _commandPipeline.TryWriteCommand(cmd);
     }
 
     /// <summary>
@@ -237,6 +240,7 @@ public sealed class MyAppMain : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         await StopAsync();
+        await _commandPipeline.DisposeAsync();
         CleanupResources();
     }
 
@@ -253,11 +257,6 @@ public sealed class MyAppMain : IAsyncDisposable
     }
 
     /// <summary>
-    /// Connects to a TCP server at the specified address and port.
-    /// </summary>
-    /// <param name="address">The server address to connect to.</param>
-    /// <param name="port">The server port to connect to.</param>
-    /// <summary>
     /// Cleans up resources and unsubscribes from events.
     /// </summary>
     private void CleanupResources()
@@ -269,52 +268,27 @@ public sealed class MyAppMain : IAsyncDisposable
         _disposed = true;
     }
 
-    private async Task ProcessCommandsAsync(CancellationToken ct)
+    private async Task HandleStartFailureAsync(
+        CancellationTokenSource linkedCts,
+        IReadOnlyCollection<IAppController> startedControllers,
+        CancellationToken stopToken
+    )
     {
-        var reader = _commandChannel!.Reader;
-        while (!ct.IsCancellationRequested)
+        linkedCts.Cancel();
+
+        foreach (var controller in startedControllers.Reverse())
         {
-            MyAppNotificationHub.ModelCommand? cmd;
             try
             {
-                if (!await reader.WaitToReadAsync(ct))
-                    break;
-                if (!reader.TryRead(out cmd))
-                    continue;
+                await controller.StopAsync(stopToken);
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-
-            var result = await _commandHandler.HandleAsync(cmd!);
-            _notifyChannel?.Writer.TryWrite(result);
+            catch { }
         }
-    }
 
-    private async Task DispatchNotificationsAsync(CancellationToken ct)
-    {
-        var reader = _notifyChannel!.Reader;
-        while (!ct.IsCancellationRequested)
-        {
-            MyAppNotificationHub.ModelResult? res;
-            try
-            {
-                if (!await reader.WaitToReadAsync(ct))
-                    break;
-                if (!reader.TryRead(out res))
-                    continue;
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-
-            if (res!.Type == "start")
-                _notificationHub?.NotifyStartCompleted(res);
-            else if (res!.Type == "end")
-                _notificationHub?.NotifyEndCompleted(res);
-        }
+        await _commandPipeline.StopAsync(stopToken);
+        _imuClient.Disconnect();
+        linkedCts.Dispose();
+        _cts = null;
     }
 
     #endregion
