@@ -59,18 +59,19 @@
 
 ## MyAppMain の拡張
 - 接続フロー（WebAPI `start` → 接続情報受領 → TCP 接続）
-  1. TCP 接続成功時に `ImuConnected` を通知
-  2. 受信ループ `ImuReceiveLoop` を開始
-- 受信ループ `ImuReceiveLoop`
+  1. コマンド処理レイヤー (`CommandHandler`) が接続情報を取り出し、`ImuClient` に委譲
+  2. `ImuClient` が TCP 接続し、成功時に `ImuConnected` を通知
+  3. `ImuClient` 内部で受信ループを開始
+- 受信ループ（`ImuClient` 内）
   - ヘッダー（1+4 バイト）を読み、メッセージ単位で分岐
   - `IMU_STATE`
-    - `State == 1(ON)` の場合のみ `ImuStateUpdated(IsOn=true)` を通知
-    - `State == 0(OFF)` の場合は通知せず、`SET_IMU_STATE(ON)` をサーバへ送信（ON 要求）
+    - `State` の値にかかわらず `ImuStateUpdated(IsOn)` を通知
+    - `State == 0(OFF)` のときは通知後に `SET_IMU_STATE(ON)` を送信して再開要求
   - `IMU_DATA`
     - ペイロードを `ImuSampleDto` に変換して `ImuSampleReceived` を通知
   - 切断時は `ImuDisconnected` を通知
 - 送信ヘルパー
-  - `SendImuOnOffRequest(bool on)` → `SET_IMU_STATE` を送信
+  - `ImuClient` が `SET_IMU_STATE` を送信（`SendImuOnOffRequest` 相当）
 - 安全性
   - ストリーム読み取りは `ReadExactAsync` で所定バイト数を必ず読む
   - 例外はループを終了し切断へ
@@ -105,4 +106,3 @@
 3. `MyAppMain` に受信ループ/送信ヘルパーを実装
 4. 既存テストの拡張（接続/ON 確認/サンプル受信/終了）
 5. ビルド・テスト
-

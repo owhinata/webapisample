@@ -88,7 +88,7 @@ public sealed class MyAppNotificationHub
 - ライフサイクル管理:
   - `Start(int port)`/`Stop()`: 互換APIを維持しつつ、登録済みコントローラを起動/停止
 - コマンド処理:
-  - `Channel<ModelCommand>`で受信、検証→内部処理（TCP接続/切断など）→結果生成
+  - `Channel<ModelCommand>`で受信し、`CommandHandler` に委譲して検証→内部処理（TCP接続/切断など）→結果生成
 - 通知:
   - 処理完了後にのみ`ModelResult`を通知（生JSONの直接通知は行わない）
   - 通知は専用ディスパッチャ経由で発火し、コントローラの処理スレッドから分離
@@ -114,7 +114,7 @@ app.Stop();
 - `MyAppMain`はASP.NET Coreの抽象化を参照しない（`IServiceCollection`、`WebApplication`などなし）
 - 調整はイベントとプレーンDTOのみで行われる
 - `MyAppNotificationHub`は同期イベントを提供；`MyAppMain`に注入された場合のみ呼び出す
-- TCP接続ロジックは`MyAppMain`内に直接実装されている
+- TCP接続ロジックは`ImuClient`に切り出され、`MyAppMain`から明示的に委譲される
 
 ## バージョニング
 - エンドポイントは`/v1`でグループ化され、`/v2`での将来の破壊的変更を可能にしつつ`/v1`を安定に保つ
