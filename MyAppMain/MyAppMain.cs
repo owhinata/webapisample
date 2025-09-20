@@ -160,54 +160,6 @@ public sealed class MyAppMain : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// Event handler for start message received from Web API host.
-    /// Processes the JSON message and establishes TCP connection if address and
-    /// port are provided.
-    /// </summary>
-    /// <param name="json">The JSON message containing connection details.</param>
-    public void OnStartMessageReceived(string json)
-    {
-        lock (_lock)
-        {
-            if (_disposed)
-                return;
-        }
-        // Enqueue as command when using direct subscription (legacy path)
-        _commandPipeline.TryWriteCommand(
-            new MyAppNotificationHub.ModelCommand(
-                "webapi:legacy",
-                "start",
-                json,
-                null,
-                DateTimeOffset.UtcNow
-            )
-        );
-    }
-
-    /// <summary>
-    /// Event handler for end message received from Web API host.
-    /// Processes the JSON message and disconnects from TCP server.
-    /// </summary>
-    /// <param name="json">The JSON message containing end details.</param>
-    public void OnEndMessageReceived(string json)
-    {
-        lock (_lock)
-        {
-            if (_disposed)
-                return;
-        }
-        _commandPipeline.TryWriteCommand(
-            new MyAppNotificationHub.ModelCommand(
-                "webapi:legacy",
-                "end",
-                json,
-                null,
-                DateTimeOffset.UtcNow
-            )
-        );
-    }
-
     public void RegisterController(IAppController controller)
     {
         if (controller == null)
