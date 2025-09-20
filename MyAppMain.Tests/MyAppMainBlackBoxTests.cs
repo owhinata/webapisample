@@ -1,7 +1,11 @@
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
 using MyAppNotificationHub;
@@ -47,30 +51,70 @@ public class MyAppMainBlackBoxTests
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        var firstRequestEntered = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var releaseFirstRequest = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var gateFlag = 0;
         var app = new global::MyAppMain.MyAppMain(hub);
+        var hostField = typeof(global::MyAppMain.MyAppMain).GetField(
+            "_host",
+            BindingFlags.Instance | BindingFlags.NonPublic
+        );
+        var host = hostField?.GetValue(app) as MyWebApi.MyWebApiHost;
+        Assert.IsNotNull(host, "Failed to access MyWebApiHost instance");
+        host!.StartRequested += _ =>
+        {
+            if (Interlocked.CompareExchange(ref gateFlag, 1, 0) == 0)
+            {
+                firstRequestEntered.TrySetResult(true);
+                releaseFirstRequest.Task.GetAwaiter().GetResult();
+            }
+        };
         var port = GetFreeTcpPort();
 
         try
         {
             app.Start(port);
-            using var client = new HttpClient
+            using var client1 = new HttpClient
+            {
+                BaseAddress = new Uri($"http://localhost:{port}"),
+            };
+            using var client2 = new HttpClient
             {
                 BaseAddress = new Uri($"http://localhost:{port}"),
             };
             var body1 = "{\"message\":\"r1\"}";
             var body2 = "{\"message\":\"r2\"}";
-            var t1 = client.PostAsync(
+            var t1 = client1.PostAsync(
                 "/v1/start",
                 new StringContent(body1, Encoding.UTF8, "application/json")
             );
-            var t2 = client.PostAsync(
+            await WaitAsync(firstRequestEntered.Task, TimeSpan.FromSeconds(1));
+
+            var t2 = client2.PostAsync(
                 "/v1/start",
                 new StringContent(body2, Encoding.UTF8, "application/json")
             );
 
-            await Task.WhenAll(t1, t2);
+            var completed = await Task.WhenAny(
+                t2,
+                Task.Delay(TimeSpan.FromMilliseconds(200))
+            );
+            if (completed != t2)
+            {
+                releaseFirstRequest.TrySetResult(true);
+                Assert.Fail(
+                    "Second request did not complete while the first was in-flight"
+                );
+            }
 
-            var codes = new[] { t1.Result.StatusCode, t2.Result.StatusCode };
+            releaseFirstRequest.TrySetResult(true);
+
+            var responses = await Task.WhenAll(t1, t2);
+            var codes = responses.Select(r => r.StatusCode).ToArray();
             Assert.IsTrue(
                 codes.Contains(HttpStatusCode.OK),
                 "One request should succeed"
@@ -82,6 +126,7 @@ public class MyAppMainBlackBoxTests
         }
         finally
         {
+            releaseFirstRequest.TrySetResult(true);
             app.Stop();
         }
     }
