@@ -16,14 +16,61 @@ dotnet tool restore >/dev/null 2>&1 || true
 echo "[pre-commit] Running CSharpier..."
 dotnet csharpier format . || true
 
-echo "[pre-commit] Running dotnet format..."
-dotnet format MyAppNotificationHub -v minimal || true
-dotnet format MyWebApi -v minimal || true
-dotnet format MyAppMain -v minimal || true
-dotnet format MyAppMain.Tests -v minimal || true
+collect_changed_projects() {
+  local has_notification_hub=0
+  local has_webapi=0
+  local has_appmain=0
+  local has_tests=0
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    local path="${line:3}"
+    if [[ "$path" == *" -> "* ]]; then
+      path="${path##* -> }"
+    fi
+
+    case "$path" in
+      MyAppNotificationHub/*|MyAppNotificationHub.csproj)
+        has_notification_hub=1
+        ;;
+      MyWebApi/*|MyWebApi.csproj)
+        has_webapi=1
+        ;;
+      MyAppMain/*|MyAppMain.csproj)
+        has_appmain=1
+        ;;
+      MyAppMain.Tests/*|MyAppMain.Tests.csproj)
+        has_tests=1
+        ;;
+    esac
+  done < <(git status --porcelain)
+
+  local projects=()
+  (( has_notification_hub )) && projects+=("MyAppNotificationHub")
+  (( has_webapi )) && projects+=("MyWebApi")
+  (( has_appmain )) && projects+=("MyAppMain")
+  (( has_tests )) && projects+=("MyAppMain.Tests")
+
+  if (( ${#projects[@]} > 0 )); then
+    printf '%s\n' "${projects[@]}"
+  fi
+}
+
+projects_to_format=()
+while IFS= read -r project; do
+  [[ -z "$project" ]] && continue
+  projects_to_format+=("$project")
+done < <(collect_changed_projects)
+
+if (( ${#projects_to_format[@]} > 0 )); then
+  echo "[pre-commit] Running dotnet format on: ${projects_to_format[*]}"
+  for project in "${projects_to_format[@]}"; do
+    dotnet format "$project" -v minimal || true
+  done
+else
+  echo "[pre-commit] No C# project changes detected; skipping dotnet format."
+fi
 
 # Stage any changes produced by the formatters.
 git add -A
 
 exit 0
-

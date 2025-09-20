@@ -247,7 +247,8 @@ bash scripts/install-git-hooks.sh
 
 - これで Git の hooks パスが `.githooks` に設定され、`pre-commit` が有効化されます。
 - 補足:
-  - 初回は `dotnet tool restore` がフック内で走ります。オフライン環境ではスキップされる場合があります。
+  - pre-commit フックは `dotnet tool restore` を自動実行し、ローカルツールが揃っていない環境でも整形が走るようになっています。
+  - `dotnet format` は変更のあった C# プロジェクトに対してのみ実行されます。
   - 一時的にフックを無効化してコミットする場合は `git commit --no-verify` を使用してください。
 
 #### コミット規約

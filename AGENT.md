@@ -20,7 +20,7 @@
 - Formatting:
   - Primary: `dotnet csharpier format .` — honors `.csharpierrc.json` (`printWidth=86`)
   - Secondary: `dotnet format` — honors `.editorconfig` (86-char lines)
-  - Tip: run `dotnet tool restore` once to install CSharpier from the tool manifest.
+  - Tip: run `bash scripts/install-git-hooks.sh` to configure hooks. The pre-commit hook restores tools automatically and limits `dotnet format` to projects with pending changes for faster commits.
 
 ## Documentation
 - High-level architecture and integration notes live in `docs/DESIGN.md`.
@@ -45,7 +45,7 @@
 - Optional in-proc testing: If needed, use `Microsoft.AspNetCore.TestHost` and refactor host wiring to allow in-memory testing without opening sockets.
 
 ## Commit & Pull Request Guidelines
-- Code formatting: run `dotnet format` on all projects before committing to ensure consistent code style.
+- Code formatting: rely on the pre-commit hook— it restores tools and formats touched projects, or manually run `dotnet csharpier format .` and `dotnet format <project>`.
 - Commits: use Conventional Commits (e.g., `feat: add weather endpoint`, `fix: handle null summary`).
 - Subject line: single line, max 80 characters.
 - Feature/Fix commits: add a brief description body (what/why, and how to validate) below the title.
