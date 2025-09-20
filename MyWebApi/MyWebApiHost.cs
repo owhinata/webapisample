@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using System.Threading.RateLimiting;
@@ -17,8 +18,21 @@ namespace MyWebApi;
 public sealed class MyWebApiHost : IAsyncDisposable
 {
     private readonly object _lock = new();
+    private readonly int _port;
     private WebApplication? _app;
     private CancellationTokenSource? _linkedCts;
+
+    public MyWebApiHost(int port)
+    {
+        if (!IsValidPort(port))
+            throw new ArgumentOutOfRangeException(nameof(port));
+        _port = port;
+    }
+
+    /// <summary>
+    /// Gets the port the host listens on when started.
+    /// </summary>
+    public int Port => _port;
 
     /// <summary>
     /// Gets a value indicating whether the Web API host is currently running.
@@ -43,14 +57,8 @@ public sealed class MyWebApiHost : IAsyncDisposable
     /// <param name="port">The port number to listen on (1-65535).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if started successfully, false otherwise.</returns>
-    public async Task<bool> StartAsync(
-        int port,
-        CancellationToken cancellationToken = default
-    )
+    public async Task<bool> StartAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsValidPort(port))
-            return false;
-
         lock (_lock)
         {
             if (_app is not null)
@@ -70,7 +78,7 @@ public sealed class MyWebApiHost : IAsyncDisposable
             ConfigureRateLimiter(builder.Services);
 
             app = builder.Build();
-            app.Urls.Add($"http://0.0.0.0:{port}");
+            app.Urls.Add($"http://0.0.0.0:{_port}");
             app.UseRateLimiter();
 
             MapV1Endpoints(app);

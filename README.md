@@ -158,8 +158,6 @@ dotnet run --project MyAppMain
 # ホットリロード付き実行
 dotnet watch run --project MyAppMain
 
-# 特定ポートはコードで指定（MyAppMain.Start）
-# 例: var app = new MyAppMain.MyAppMain(); app.Start(5008);
 ```
 
 ---
@@ -337,8 +335,8 @@ dotnet --list-runtimes
 #### ポートが既に使用されている
 ```bash
 # 解決方法
-# コード内で MyAppMain の Start に別ポートを指定
-// 例: app.Start(5009); // 5008の代わりに5009を使用
+# Web API ホストを生成する際に別ポートを指定
+// 例: app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(5009)));
 ```
 
 #### ビルドエラー

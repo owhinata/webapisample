@@ -3,13 +3,13 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
 using MyAppNotificationHub;
+using MyWebApi;
 
 namespace MyAppMain.Tests;
 
@@ -27,11 +27,12 @@ public class MyAppMainBlackBoxTests
         hub.StartCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
+        app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
 
         try
         {
             // Arrange HTTP client against the hosted Web API.
-            app.Start(port);
+            app.Start();
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://localhost:{port}"),
@@ -64,14 +65,8 @@ public class MyAppMainBlackBoxTests
         var firstRequestEntered = NewTcs<bool>();
         var releaseFirstRequest = NewTcs<bool>();
         var gateFlag = 0;
-        var app = new global::MyAppMain.MyAppMain(hub);
-        var hostField = typeof(global::MyAppMain.MyAppMain).GetField(
-            "_host",
-            BindingFlags.Instance | BindingFlags.NonPublic
-        );
-        var host = hostField?.GetValue(app) as MyWebApi.MyWebApiHost;
-        Assert.IsNotNull(host, "Failed to access MyWebApiHost instance");
-        host!.StartRequested += _ =>
+        var host = new MyWebApiHost(GetFreeTcpPort());
+        host.StartRequested += _ =>
         {
             if (Interlocked.CompareExchange(ref gateFlag, 1, 0) == 0)
             {
@@ -79,19 +74,20 @@ public class MyAppMainBlackBoxTests
                 releaseFirstRequest.Task.GetAwaiter().GetResult();
             }
         };
-        var port = GetFreeTcpPort();
+        var app = new global::MyAppMain.MyAppMain(hub);
+        app.RegisterController(new WebApiControllerAdapter(host));
 
         try
         {
             // Spin up Web API and two clients to issue concurrent requests.
-            app.Start(port);
+            app.Start();
             using var client1 = new HttpClient
             {
-                BaseAddress = new Uri($"http://localhost:{port}"),
+                BaseAddress = new Uri($"http://localhost:{host.Port}"),
             };
             using var client2 = new HttpClient
             {
-                BaseAddress = new Uri($"http://localhost:{port}"),
+                BaseAddress = new Uri($"http://localhost:{host.Port}"),
             };
             var body1 = "{\"message\":\"r1\"}";
             var body2 = "{\"message\":\"r2\"}";
@@ -151,10 +147,11 @@ public class MyAppMainBlackBoxTests
         hub.EndCompleted += result => tcs.TrySetResult(result);
         var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
+        app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
 
         try
         {
-            app.Start(port);
+            app.Start();
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://localhost:{port}"),
@@ -252,11 +249,14 @@ public class MyAppMainBlackBoxTests
         };
         var app = new global::MyAppMain.MyAppMain(hub2);
         var apiPort = GetFreeTcpPort();
+        app.RegisterController(
+            new WebApiControllerAdapter(new MyWebApiHost(apiPort))
+        );
 
         try
         {
-            // Arrange API client and point to the synthetic IMU server.
-            app.Start(apiPort);
+            // Arrange API client and point to the synthetic IMU server。
+            app.Start();
             using var client = new HttpClient
             {
                 BaseAddress = new Uri($"http://localhost:{apiPort}"),

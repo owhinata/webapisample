@@ -86,7 +86,7 @@ public sealed class MyAppNotificationHub
 
 ## MyAppMainの責任
 - ライフサイクル管理:
-  - `Start(int port)`/`Stop()`: 互換APIを維持しつつ、登録済みコントローラを起動/停止
+  - `Start()`/`Stop()`: 登録済みコントローラを順番に起動/停止
 - コマンド処理:
   - `CommandPipeline` が `Channel<ModelCommand>` のバックグラウンド処理と通知ディスパッチを担当
   - `CommandHandler` に委譲して検証→内部処理（TCP接続/切断など）→結果生成
@@ -97,15 +97,18 @@ public sealed class MyAppNotificationHub
 使用例:
 
 ```csharp
-// 既定（通知なし）
+// Web API を利用する場合
 var app = new MyAppMain();
-app.Start(5008);
+var host = new MyWebApiHost(port: 5008);
+app.RegisterController(new WebApiControllerAdapter(host));
+app.Start();
 
-// ビュー（UI）を購読させる
+// ビュー（UI）を購読させるケース
 var junction = new MyAppNotificationHub.MyAppNotificationHub();
 junction.StartCompleted += result => {/* 更新処理 */};
 var app2 = new MyAppMain(junction);
-app2.Start(5008);
+app2.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(5008)));
+app2.Start();
 
 // 停止
 app.Stop();
@@ -145,9 +148,10 @@ public async Task Posting_Start_Triggers_External_Handler()
     junction.StartRequested += json => startTcs.TrySetResult(json);
     var app = new MyAppMain(junction);
     var port = GetFreePort();
+    app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
     try
     {
-        app.Start(port);
+        app.Start();
         var client = new HttpClient { BaseAddress = new Uri($"http://localhost:{port}") };
         var json = "{\"address\":\"localhost\",\"port\":8080}";
         var res = await client.PostAsync("/v1/start", new StringContent(json, Encoding.UTF8, "application/json"));

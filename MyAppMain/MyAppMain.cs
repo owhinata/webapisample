@@ -13,7 +13,6 @@ namespace MyAppMain;
 public sealed class MyAppMain : IAsyncDisposable
 {
     private readonly object _lock = new();
-    private readonly MyWebApiHost _host = new();
     private readonly NotificationHub? _notificationHub;
     private readonly List<IAppController> _controllers = new();
     private readonly ImuClient _imuClient;
@@ -39,9 +38,9 @@ public sealed class MyAppMain : IAsyncDisposable
     }
 
     /// <summary>
-    /// Gets a value indicating whether the Web API host is currently running.
+    /// Gets a value indicating whether the application is currently running.
     /// </summary>
-    public bool IsRunning => _host.IsRunning;
+    public bool IsRunning => _cts is not null;
 
     /// <summary>
     /// Gets a value indicating whether the TCP client is currently connected.
@@ -54,8 +53,8 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <param name="port">The port number to listen on (1-65535).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if started successfully, false otherwise.</returns>
-    public bool Start(int port, CancellationToken cancellationToken = default) =>
-        StartAsync(port, cancellationToken).GetAwaiter().GetResult();
+    public bool Start(CancellationToken cancellationToken = default) =>
+        StartAsync(cancellationToken).GetAwaiter().GetResult();
 
     /// <summary>
     /// Synchronously stops the Web API host.
@@ -68,17 +67,10 @@ public sealed class MyAppMain : IAsyncDisposable
     /// <summary>
     /// Asynchronously starts the Web API host on the specified port.
     /// </summary>
-    /// <param name="port">The port number to listen on (1-65535).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if started successfully, false otherwise.</returns>
-    public async Task<bool> StartAsync(
-        int port,
-        CancellationToken cancellationToken = default
-    )
+    public async Task<bool> StartAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsValidPort(port))
-            return false;
-
         lock (_lock)
         {
             if (_disposed)
@@ -93,14 +85,6 @@ public sealed class MyAppMain : IAsyncDisposable
         );
         _cts = linkedCts;
         _commandPipeline.Start(linkedCts.Token);
-
-        // If no controllers registered, add default WebAPI controller for the
-        // given port
-        if (_controllers.Count == 0)
-        {
-            var adapter = new WebApiControllerAdapter(_host, port);
-            RegisterController(adapter);
-        }
 
         var startedControllers = new List<IAppController>();
 
@@ -244,16 +228,6 @@ public sealed class MyAppMain : IAsyncDisposable
     }
 
     #region Private Methods
-
-    /// <summary>
-    /// Validates that the port number is within valid range
-    /// </summary>
-    /// <param name="port">The port number to validate.</param>
-    /// <returns>True if the port is valid, false otherwise.</returns>
-    private static bool IsValidPort(int port)
-    {
-        return port > 0 && port <= 65535;
-    }
 
     /// <summary>
     /// Cleans up resources and unsubscribes from events.
