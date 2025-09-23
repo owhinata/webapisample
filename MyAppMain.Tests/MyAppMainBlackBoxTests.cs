@@ -8,8 +8,9 @@ using System.Text.Json;
 using System.Threading;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
-using MyAppNotificationHub;
+using MyNotificationHub;
 using MyWebApi;
+using NotificationHub = MyNotificationHub.MyNotificationHub;
 
 namespace MyAppMain.Tests;
 
@@ -22,8 +23,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Start_Post_Invokes_OnStart_Delegate()
     {
-        var tcs = NewTcs<MyAppNotificationHub.ModelResult>();
-        var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        var tcs = NewTcs<MyNotificationHub.ModelResult>();
+        var hub = new NotificationHub();
         hub.ResultPublished += result =>
         {
             if (result.Type == "start")
@@ -65,7 +66,7 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task Concurrent_Start_Requests_Yield_One_200_And_One_429()
     {
-        var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        var hub = new NotificationHub();
         var firstRequestEntered = NewTcs<bool>();
         var releaseFirstRequest = NewTcs<bool>();
         var gateFlag = 0;
@@ -146,8 +147,8 @@ public class MyAppMainBlackBoxTests
     [TestMethod]
     public async Task End_Post_Invokes_OnEnd_Delegate()
     {
-        var tcs = NewTcs<MyAppNotificationHub.ModelResult>();
-        var hub = new MyAppNotificationHub.MyAppNotificationHub();
+        var tcs = NewTcs<MyNotificationHub.ModelResult>();
+        var hub = new NotificationHub();
         hub.ResultPublished += result =>
         {
             if (result.Type == "end")
@@ -217,7 +218,7 @@ public class MyAppMainBlackBoxTests
         var serverPort = testServer.Start();
 
         // Create hub and event waiters
-        var hub2 = new MyAppNotificationHub.MyAppNotificationHub();
+        var hub2 = new NotificationHub();
         var startDone = NewTcs<bool>();
         var connected = NewTcs<bool>();
         var imuOnObserved = false;

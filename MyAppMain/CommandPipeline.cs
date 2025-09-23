@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using MyNotificationHub;
+using NotificationHub = MyNotificationHub.MyNotificationHub;
 
 namespace MyAppMain;
 
@@ -11,11 +13,11 @@ namespace MyAppMain;
 internal sealed class CommandPipeline : IAsyncDisposable
 {
     private readonly CommandHandler _handler;
-    private readonly MyAppNotificationHub.MyAppNotificationHub? _notificationHub;
-    private readonly Channel<MyAppNotificationHub.ModelCommand> _commandChannel =
-        Channel.CreateUnbounded<MyAppNotificationHub.ModelCommand>();
-    private readonly Channel<MyAppNotificationHub.ModelResult> _resultChannel =
-        Channel.CreateUnbounded<MyAppNotificationHub.ModelResult>();
+    private readonly NotificationHub? _notificationHub;
+    private readonly Channel<ModelCommand> _commandChannel =
+        Channel.CreateUnbounded<ModelCommand>();
+    private readonly Channel<ModelResult> _resultChannel =
+        Channel.CreateUnbounded<ModelResult>();
     private CancellationTokenSource? _cts;
     private Task? _processorTask;
     private Task? _dispatcherTask;
@@ -25,10 +27,7 @@ internal sealed class CommandPipeline : IAsyncDisposable
     /// </summary>
     /// <param name="handler">Handler used to execute incoming commands.</param>
     /// <param name="notificationHub">Hub notified when results are produced.</param>
-    public CommandPipeline(
-        CommandHandler handler,
-        MyAppNotificationHub.MyAppNotificationHub? notificationHub
-    )
+    public CommandPipeline(CommandHandler handler, NotificationHub? notificationHub)
     {
         _handler = handler;
         _notificationHub = notificationHub;
@@ -95,7 +94,7 @@ internal sealed class CommandPipeline : IAsyncDisposable
     /// </summary>
     /// <param name="command">Command to enqueue.</param>
     /// <returns><c>true</c> if the command was accepted; otherwise <c>false</c>.</returns>
-    public bool TryWriteCommand(MyAppNotificationHub.ModelCommand command) =>
+    public bool TryWriteCommand(ModelCommand command) =>
         _commandChannel.Writer.TryWrite(command);
 
     /// <summary>
@@ -111,7 +110,7 @@ internal sealed class CommandPipeline : IAsyncDisposable
         var reader = _commandChannel.Reader;
         while (!ct.IsCancellationRequested)
         {
-            MyAppNotificationHub.ModelCommand? cmd = null;
+            ModelCommand? cmd = null;
             try
             {
                 if (!await reader.WaitToReadAsync(ct))

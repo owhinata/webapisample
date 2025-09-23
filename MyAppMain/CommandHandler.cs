@@ -1,7 +1,7 @@
 using System;
 using System.Text.Json;
 using System.Threading.Tasks;
-using MyAppNotificationHub;
+using MyNotificationHub;
 
 namespace MyAppMain;
 

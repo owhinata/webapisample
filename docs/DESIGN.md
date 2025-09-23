@@ -14,7 +14,7 @@
   - 受け取ったコマンドを処理し`ModelResult`を生成
   - TCP接続/切断などアプリの中核ロジックを担う
   - 複数コントローラを登録/開始/停止できる
-- View（MyAppNotificationHub購読者）
+- View（MyNotificationHub購読者）
   - モデル処理の「結果」を受け取り、UI等に反映
   - 通知は別スレッドから同期イベントで発火（非同期化は購読側に委譲）
 
@@ -70,14 +70,14 @@ public record ModelResult(
     DateTimeOffset CompletedAt);
 ```
 
-`MyAppNotificationHub`は「コマンド要求（Start/End）」と「処理結果（ModelResult）」のイベントを提供する。
+`MyNotificationHub`は「コマンド要求（Start/End）」と「処理結果（ModelResult）」のイベントを提供する。
 結果通知は `ResultPublished` 1 本に統一され、購読側が `ModelResult.Type` を見て分岐する。
 
 ## データフロー
 1. コントローラが外部入力を受け取り`ModelCommand`を発火
 2. `MyAppMain`はコマンドを受理して非同期ワーカーで処理
 3. 処理完了後に`ModelResult`を生成
-4. 専用の通知ディスパッチャが`MyAppNotificationHub`のイベントを同期発火（UIなどが購読）
+4. 専用の通知ディスパッチャが`MyNotificationHub`のイベントを同期発火（UIなどが購読）
 
 ## MyAppMainの責任
 - ライフサイクル管理:
@@ -99,7 +99,7 @@ app.RegisterController(new WebApiControllerAdapter(host));
 app.Start();
 
 // ビュー（UI）を購読させるケース
-var junction = new MyAppNotificationHub.MyAppNotificationHub();
+var junction = new MyNotificationHub.MyNotificationHub();
 junction.ResultPublished += result =>
 {
     if (result.Type == "start")
@@ -118,7 +118,7 @@ app.Stop();
 ## 依存関係の境界
 - `MyAppMain`はASP.NET Coreの抽象化を参照しない（`IServiceCollection`、`WebApplication`などなし）
 - 調整はイベントとプレーンDTOのみで行われる
-- `MyAppNotificationHub`は同期イベントを提供；`MyAppMain`に注入された場合のみ呼び出す
+- `MyNotificationHub`は同期イベントを提供；`MyAppMain`に注入された場合のみ呼び出す
 - TCP接続ロジックは`ImuClient`に切り出され、`MyAppMain`から明示的に委譲される
 
 ## バージョニング
@@ -128,7 +128,7 @@ app.Stop();
 - テストプロジェクト`MyAppMain.Tests`はMSTestを使用
 - `MyAppMain`を空いているポートで開始
 - コントローラ（WebAPI）経由でコマンド送信
-- `MyAppNotificationHub.ResultPublished` を購読し `ModelResult` を検証
+- `MyNotificationHub.ResultPublished` を購読し `ModelResult` を検証
 - `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
 ## IMU 連携の詳細設計
@@ -145,7 +145,7 @@ IMU サーバとの TCP 連携プロトコル、NotificationHub への通知 DTO
 public async Task Posting_Start_Triggers_External_Handler()
 {
     var startTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-    var junction = new MyAppNotificationHub.MyAppNotificationHub();
+    var junction = new MyNotificationHub.MyNotificationHub();
     junction.StartRequested += json => startTcs.TrySetResult(json);
     var app = new MyAppMain(junction);
     var port = GetFreePort();

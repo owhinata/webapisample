@@ -1,3 +1,4 @@
+using MyNotificationHub;
 using MyWebApi;
 
 namespace MyAppMain;
@@ -23,23 +24,11 @@ public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
         Id = id ?? $"webapi:{host.Port}";
         _host.StartRequested += body =>
             CommandRequested?.Invoke(
-                new MyAppNotificationHub.ModelCommand(
-                    Id,
-                    "start",
-                    body,
-                    null,
-                    DateTimeOffset.UtcNow
-                )
+                new ModelCommand(Id, "start", body, null, DateTimeOffset.UtcNow)
             );
         _host.EndRequested += body =>
             CommandRequested?.Invoke(
-                new MyAppNotificationHub.ModelCommand(
-                    Id,
-                    "end",
-                    body,
-                    null,
-                    DateTimeOffset.UtcNow
-                )
+                new ModelCommand(Id, "end", body, null, DateTimeOffset.UtcNow)
             );
     }
 
@@ -51,7 +40,7 @@ public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
     /// <summary>
     /// Raised when a command is produced by the underlying host.
     /// </summary>
-    public event Action<MyAppNotificationHub.ModelCommand>? CommandRequested;
+    public event Action<ModelCommand>? CommandRequested;
 
     /// <inheritdoc />
     public Task<bool> StartAsync(CancellationToken ct = default) =>

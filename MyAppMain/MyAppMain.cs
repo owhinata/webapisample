@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using MyNotificationHub;
 using MyWebApi;
-using NotificationHub = MyAppNotificationHub.MyAppNotificationHub;
+using NotificationHub = MyNotificationHub.MyNotificationHub;
 
 namespace MyAppMain;
 

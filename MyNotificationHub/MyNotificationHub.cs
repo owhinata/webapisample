@@ -1,4 +1,4 @@
-namespace MyAppNotificationHub;
+namespace MyNotificationHub;
 
 /// <summary>
 /// Represents a command emitted by a controller for the model to process.
@@ -25,13 +25,13 @@ public record ModelResult(
 );
 
 /// <summary>
-/// MyAppNotificationHub acts as a synchronous notification hub between MyAppMain
+/// MyNotificationHub acts as a synchronous notification hub between MyAppMain
 /// and external observers (e.g., UI/View). MyAppMain calls HandleStart/End,
 /// which synchronously invoke corresponding events for subscribers.
 /// If asynchronous processing is needed, subscribers should offload work
 /// on their side.
 /// </summary>
-public class MyAppNotificationHub
+public class MyNotificationHub
 {
     /// <summary>
     /// Raised when MyAppMain reports a start event. Invoked synchronously.

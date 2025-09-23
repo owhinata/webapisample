@@ -1,5 +1,7 @@
 namespace MyAppMain;
 
+using MyNotificationHub;
+
 /// <summary>
 /// Defines the contract for application controllers that surface commands to the model.
 /// </summary>
@@ -13,7 +15,7 @@ public interface IAppController
     /// <summary>
     /// Raised when a controller emits a command for the model to handle.
     /// </summary>
-    event Action<MyAppNotificationHub.ModelCommand>? CommandRequested;
+    event Action<ModelCommand>? CommandRequested;
 
     /// <summary>
     /// Starts the controller.

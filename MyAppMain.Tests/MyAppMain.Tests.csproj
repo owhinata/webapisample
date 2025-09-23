@@ -17,6 +17,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\MyAppMain\MyAppMain.csproj" />
-    <ProjectReference Include="..\\MyAppNotificationHub\\MyAppNotificationHub.csproj" />
+    <ProjectReference Include="..\\MyNotificationHub\\MyNotificationHub.csproj" />
   </ItemGroup>
 </Project>

@@ -2,7 +2,7 @@
 
 ## 目的
 - WebAPI の `start` で IMU データ配信を開始し、TCP サーバへ接続する。
-- 接続・状態・データを `MyAppNotificationHub` に DTO で通知する。
+- 接続・状態・データを `MyNotificationHub` に DTO で通知する。
 - IMU サーバが `OFF` の場合はクライアント（本アプリ）から `ON` 要求を送る。
 - テストでは「`ON` 以外の状態通知を無視する」ことを確認する。
 
@@ -45,7 +45,7 @@
 - 終了
   - `cts.Cancel()` → クライアント全切断、リソース解放
 
-## NotificationHub（`MyAppNotificationHub`）の拡張
+## NotificationHub（`MyNotificationHub`）の拡張
 - DTO を追加（例）
   - `ImuConnectionChangedDto { bool Connected; string? RemoteEndPoint; }`
   - `ImuStateChangedDto { bool IsOn; }`
@@ -73,7 +73,7 @@
 - 送信ヘルパー
   - `ImuClient` が `SET_IMU_STATE` を送信（`SendImuOnOffRequest` 相当）
 - チャネル処理
-  - `CommandPipeline` が非同期チャネル (`Channel<ModelCommand>`/`Channel<ModelResult>`) を処理し、結果を `MyAppNotificationHub` へ通知
+  - `CommandPipeline` が非同期チャネル (`Channel<ModelCommand>`/`Channel<ModelResult>`) を処理し、結果を `MyNotificationHub` へ通知
 - 安全性
   - ストリーム読み取りは `ReadExactAsync` で所定バイト数を必ず読む
   - 例外はループを終了し切断へ
@@ -103,7 +103,7 @@
 - 認証/暗号化（本番想定では TLS や署名を検討）
 
 ## 実装順序（このドキュメントに基づく）
-1. `MyAppNotificationHub` に DTO とイベントを追加
+1. `MyNotificationHub` に DTO とイベントを追加
 2. テスト用 `TestImuServer` を `MyAppMain.Tests` に実装
 3. `MyAppMain` に受信ループ/送信ヘルパーを実装
 4. 既存テストの拡張（接続/ON 確認/サンプル受信/終了）

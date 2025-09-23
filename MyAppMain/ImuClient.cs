@@ -3,6 +3,8 @@ using System.IO;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using MyNotificationHub;
+using NotificationHub = MyNotificationHub.MyNotificationHub;
 
 namespace MyAppMain;
 
@@ -16,7 +18,7 @@ internal sealed class ImuClient : IDisposable
     private const byte MsgSetImuState = 0x81;
 
     private readonly object _sync = new();
-    private readonly MyAppNotificationHub.MyAppNotificationHub? _notificationHub;
+    private readonly NotificationHub? _notificationHub;
     private TcpClient? _tcpClient;
     private CancellationTokenSource? _cts;
     private Task? _receiverTask;
@@ -27,7 +29,7 @@ internal sealed class ImuClient : IDisposable
     /// <param name="notificationHub">
     /// Optional hub that receives IMU connection and data notifications.
     /// </param>
-    public ImuClient(MyAppNotificationHub.MyAppNotificationHub? notificationHub)
+    public ImuClient(NotificationHub? notificationHub)
     {
         _notificationHub = notificationHub;
     }
@@ -71,10 +73,7 @@ internal sealed class ImuClient : IDisposable
                 var endpoint = client.Client.RemoteEndPoint?.ToString();
                 Console.WriteLine($"Connected to TCP server at {address}:{port}");
                 _notificationHub?.NotifyImuConnected(
-                    new MyAppNotificationHub.MyAppNotificationHub.ImuConnectionChangedDto(
-                        true,
-                        endpoint
-                    )
+                    new NotificationHub.ImuConnectionChangedDto(true, endpoint)
                 );
             }
             catch (Exception ex)
@@ -163,7 +162,7 @@ internal sealed class ImuClient : IDisposable
         var state = payload.Length > 0 ? payload[0] : (byte)0;
         var isOn = state == 1;
         _notificationHub?.NotifyImuStateUpdated(
-            new MyAppNotificationHub.MyAppNotificationHub.ImuStateChangedDto(isOn)
+            new NotificationHub.ImuStateChangedDto(isOn)
         );
         if (!isOn)
         {
@@ -180,10 +179,10 @@ internal sealed class ImuClient : IDisposable
         var ax = BitConverter.ToSingle(payload, 20);
         var ay = BitConverter.ToSingle(payload, 24);
         var az = BitConverter.ToSingle(payload, 28);
-        var dto = new MyAppNotificationHub.MyAppNotificationHub.ImuSampleDto(
+        var dto = new NotificationHub.ImuSampleDto(
             ts,
-            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(gx, gy, gz),
-            new MyAppNotificationHub.MyAppNotificationHub.ImuVector3(ax, ay, az)
+            new NotificationHub.ImuVector3(gx, gy, gz),
+            new NotificationHub.ImuVector3(ax, ay, az)
         );
         _notificationHub?.NotifyImuSample(dto);
     }
@@ -233,10 +232,7 @@ internal sealed class ImuClient : IDisposable
             }
 
             _notificationHub?.NotifyImuDisconnected(
-                new MyAppNotificationHub.MyAppNotificationHub.ImuConnectionChangedDto(
-                    false,
-                    null
-                )
+                new NotificationHub.ImuConnectionChangedDto(false, null)
             );
             Console.WriteLine("Disconnected from TCP server");
         }
