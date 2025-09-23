@@ -153,6 +153,7 @@ public sealed class MyAppMain : IAsyncDisposable
             }
 
             _imuClient.Disconnect();
+            _commandHandler.ResetOwnership();
             return true;
         }
         finally
@@ -165,8 +166,38 @@ public sealed class MyAppMain : IAsyncDisposable
     {
         if (controller == null)
             throw new ArgumentNullException(nameof(controller));
+
+        if (_controllers.Contains(controller))
+            return;
+
         _controllers.Add(controller);
-        controller.CommandRequested += cmd => _commandPipeline.TryWriteCommand(cmd);
+        controller.CommandRequested -= HandleControllerCommandRequested;
+        controller.CommandRequested += HandleControllerCommandRequested;
+
+        if (controller is ICommandPipelineAware aware)
+            aware.AttachPipeline(_commandPipeline);
+    }
+
+    /// <summary>
+    /// Unregisters a controller that was previously added.
+    /// </summary>
+    /// <param name="controller">Controller to unregister.</param>
+    /// <returns>True if the controller was removed; otherwise false.</returns>
+    public bool UnregisterController(IAppController controller)
+    {
+        if (controller == null)
+            throw new ArgumentNullException(nameof(controller));
+
+        var removed = _controllers.Remove(controller);
+        if (!removed)
+            return false;
+
+        controller.CommandRequested -= HandleControllerCommandRequested;
+        if (controller is ICommandPipelineAware aware)
+            aware.DetachPipeline(_commandPipeline);
+
+        _commandHandler.ReleaseOwnership(controller.Id);
+        return true;
     }
 
     /// <summary>
@@ -191,6 +222,7 @@ public sealed class MyAppMain : IAsyncDisposable
             return;
 
         _imuClient.Dispose();
+        _commandHandler.ResetOwnership();
         _disposed = true;
     }
 
@@ -219,8 +251,14 @@ public sealed class MyAppMain : IAsyncDisposable
 
         await _commandPipeline.StopAsync(stopToken);
         _imuClient.Disconnect();
+        _commandHandler.ResetOwnership();
         linkedCts.Dispose();
         _cts = null;
+    }
+
+    private void HandleControllerCommandRequested(ModelCommand command)
+    {
+        _commandPipeline.TryWriteCommand(command);
     }
 
     #endregion

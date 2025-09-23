@@ -11,6 +11,8 @@ namespace MyAppMain;
 internal sealed class CommandHandler
 {
     private readonly ImuClient _imuClient;
+    private readonly object _ownershipSync = new();
+    private string? _currentOwnerId;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CommandHandler"/> class.
@@ -30,43 +32,19 @@ internal sealed class CommandHandler
     {
         try
         {
-            switch (command.Type)
+            return command.Type switch
             {
-                case "start":
-                    {
-                        var (address, port) = TryParseServerInfo(command.RawJson);
-                        if (address is not null && port is not null)
-                            _imuClient.Connect(address, port.Value);
-
-                        return new ValueTask<ModelResult>(
-                            SuccessResult(
-                                command.ControllerId,
-                                command.Type,
-                                command.CorrelationId
-                            )
-                        );
-                    }
-                case "end":
-                    {
-                        _imuClient.Disconnect();
-                        return new ValueTask<ModelResult>(
-                            SuccessResult(
-                                command.ControllerId,
-                                command.Type,
-                                command.CorrelationId
-                            )
-                        );
-                    }
-                default:
-                    return new ValueTask<ModelResult>(
-                        ErrorResult(
-                            command.ControllerId,
-                            command.Type,
-                            "Unknown command type",
-                            command.CorrelationId
-                        )
-                    );
-            }
+                "start" => new ValueTask<ModelResult>(HandleStart(command)),
+                "end" => new ValueTask<ModelResult>(HandleStop(command)),
+                _ => new ValueTask<ModelResult>(
+                    ErrorResult(
+                        command.ControllerId,
+                        command.Type,
+                        "Unknown command type",
+                        command.CorrelationId
+                    )
+                ),
+            };
         }
         catch (Exception ex)
         {
@@ -79,6 +57,146 @@ internal sealed class CommandHandler
                 )
             );
         }
+    }
+
+    /// <summary>
+    /// Clears ownership state if held by the specified controller.
+    /// </summary>
+    /// <param name="controllerId">Identifier of the controller being removed.</param>
+    public void ReleaseOwnership(string controllerId)
+    {
+        lock (_ownershipSync)
+        {
+            if (_currentOwnerId == controllerId)
+                _currentOwnerId = null;
+        }
+    }
+
+    /// <summary>
+    /// Resets ownership, typically after a full application shutdown.
+    /// </summary>
+    public void ResetOwnership()
+    {
+        lock (_ownershipSync)
+        {
+            _currentOwnerId = null;
+        }
+    }
+
+    private ModelResult HandleStart(ModelCommand command)
+    {
+        var (address, port) = TryParseServerInfo(command.RawJson);
+        ImuControlResult controlResult;
+        lock (_ownershipSync)
+        {
+            controlResult = EvaluateStart(command.ControllerId, address, port);
+        }
+
+        return ToModelResult(command, controlResult);
+    }
+
+    private ModelResult HandleStop(ModelCommand command)
+    {
+        ImuControlResult controlResult;
+        lock (_ownershipSync)
+        {
+            controlResult = EvaluateStop(command.ControllerId);
+        }
+
+        return ToModelResult(command, controlResult);
+    }
+
+    private ImuControlResult EvaluateStart(
+        string controllerId,
+        string? address,
+        int? port
+    )
+    {
+        if (_currentOwnerId is null)
+        {
+            try
+            {
+                if (address is not null && port is not null)
+                    _imuClient.Connect(address, port.Value);
+
+                _currentOwnerId = controllerId;
+                var message = address is not null
+                    ? $"IMU start accepted for {controllerId} at {address}:{port}."
+                    : $"IMU start accepted for {controllerId}.";
+                return new ImuControlResult(ImuControlStatus.Success, message);
+            }
+            catch (Exception ex)
+            {
+                _currentOwnerId = null;
+                return new ImuControlResult(
+                    ImuControlStatus.Failed,
+                    $"IMU start failed: {ex.Message}"
+                );
+            }
+        }
+
+        if (string.Equals(_currentOwnerId, controllerId, StringComparison.Ordinal))
+        {
+            return new ImuControlResult(
+                ImuControlStatus.AlreadyRunning,
+                "IMU already started by this controller."
+            );
+        }
+
+        return new ImuControlResult(
+            ImuControlStatus.OwnershipError,
+            "IMU is currently controlled by another controller."
+        );
+    }
+
+    private ImuControlResult EvaluateStop(string controllerId)
+    {
+        if (_currentOwnerId is null)
+        {
+            _imuClient.Disconnect();
+            return new ImuControlResult(
+                ImuControlStatus.Success,
+                "IMU stop accepted; no owner was assigned."
+            );
+        }
+
+        if (!string.Equals(_currentOwnerId, controllerId, StringComparison.Ordinal))
+        {
+            return new ImuControlResult(
+                ImuControlStatus.OwnershipError,
+                "Only the owning controller can stop the IMU."
+            );
+        }
+
+        _currentOwnerId = null;
+        _imuClient.Disconnect();
+        return new ImuControlResult(ImuControlStatus.Success, "IMU stop accepted.");
+    }
+
+    private ModelResult ToModelResult(
+        ModelCommand command,
+        ImuControlResult controlResult
+    )
+    {
+        var success =
+            controlResult.Status
+                is ImuControlStatus.Success
+                    or ImuControlStatus.AlreadyRunning;
+        var payload = new ImuCommandPayload(
+            controlResult.Status,
+            _imuClient.IsConnected,
+            controlResult.Message
+        );
+
+        return new ModelResult(
+            command.ControllerId,
+            command.Type,
+            success,
+            success ? null : controlResult.Message,
+            payload,
+            command.CorrelationId,
+            DateTimeOffset.UtcNow
+        );
     }
 
     private (string? address, int? port) TryParseServerInfo(string json)
@@ -103,23 +221,6 @@ internal sealed class CommandHandler
         }
 
         return (null, null);
-    }
-
-    private ModelResult SuccessResult(
-        string controllerId,
-        string type,
-        string? correlationId
-    )
-    {
-        return new ModelResult(
-            controllerId,
-            type,
-            true,
-            null,
-            new { Connected = _imuClient.IsConnected },
-            correlationId,
-            DateTimeOffset.UtcNow
-        );
     }
 
     private static ModelResult ErrorResult(

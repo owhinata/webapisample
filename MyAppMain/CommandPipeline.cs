@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using MyNotificationHub;
@@ -18,6 +20,10 @@ internal sealed class CommandPipeline : IAsyncDisposable
         Channel.CreateUnbounded<ModelCommand>();
     private readonly Channel<ModelResult> _resultChannel =
         Channel.CreateUnbounded<ModelResult>();
+    private readonly ConcurrentDictionary<
+        string,
+        TaskCompletionSource<ModelResult>
+    > _pendingResults = new();
     private CancellationTokenSource? _cts;
     private Task? _processorTask;
     private Task? _dispatcherTask;
@@ -86,6 +92,7 @@ internal sealed class CommandPipeline : IAsyncDisposable
             cts.Dispose();
             _processorTask = null;
             _dispatcherTask = null;
+            CompletePendingWithCancellation();
         }
     }
 
@@ -96,6 +103,55 @@ internal sealed class CommandPipeline : IAsyncDisposable
     /// <returns><c>true</c> if the command was accepted; otherwise <c>false</c>.</returns>
     public bool TryWriteCommand(ModelCommand command) =>
         _commandChannel.Writer.TryWrite(command);
+
+    /// <summary>
+    /// Enqueues a command for processing and awaits its completion result.
+    /// </summary>
+    /// <param name="command">Command to execute. Requires a correlation id.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>The <see cref="ModelResult"/> produced by the handler.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the pipeline is not running or correlation id missing.</exception>
+    public Task<ModelResult> ExecuteCommandAsync(
+        ModelCommand command,
+        CancellationToken cancellationToken = default
+    )
+    {
+        if (_cts is null)
+            throw new InvalidOperationException("Command pipeline is not running.");
+        if (string.IsNullOrEmpty(command.CorrelationId))
+            throw new InvalidOperationException("CorrelationId is required.");
+
+        var tcs = new TaskCompletionSource<ModelResult>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        if (!_pendingResults.TryAdd(command.CorrelationId, tcs))
+            throw new InvalidOperationException("CorrelationId already registered.");
+
+        if (!_commandChannel.Writer.TryWrite(command))
+        {
+            _pendingResults.TryRemove(command.CorrelationId, out _);
+            throw new InvalidOperationException("Unable to enqueue command.");
+        }
+
+        if (cancellationToken.CanBeCanceled)
+        {
+            cancellationToken.Register(() =>
+            {
+                if (
+                    command.CorrelationId is not null
+                    && _pendingResults.TryRemove(
+                        command.CorrelationId,
+                        out var pending
+                    )
+                )
+                {
+                    pending.TrySetCanceled(cancellationToken);
+                }
+            });
+        }
+
+        return tcs.Task;
+    }
 
     /// <summary>
     /// Disposes the pipeline and stops the background workers.
@@ -145,12 +201,33 @@ internal sealed class CommandPipeline : IAsyncDisposable
                         continue;
 
                     _notificationHub?.NotifyResult(result);
+                    ResolvePending(result);
                 }
             }
         }
         catch (OperationCanceledException)
         {
             // Graceful shutdown
+        }
+    }
+
+    private void ResolvePending(ModelResult result)
+    {
+        if (string.IsNullOrEmpty(result.CorrelationId))
+            return;
+
+        if (_pendingResults.TryRemove(result.CorrelationId, out var pending))
+        {
+            pending.TrySetResult(result);
+        }
+    }
+
+    private void CompletePendingWithCancellation()
+    {
+        foreach (var entry in _pendingResults)
+        {
+            if (_pendingResults.TryRemove(entry.Key, out var pending))
+                pending.TrySetCanceled();
         }
     }
 }
