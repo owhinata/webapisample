@@ -99,4 +99,30 @@ public class MyAppMainProgrammaticControllerTests
             await app.DisposeAsync();
         }
     }
+
+    /// <summary>
+    /// Returns AlreadyRunning when the owning controller issues Start again.
+    /// </summary>
+    [TestMethod]
+    public async Task Owner_Start_Twice_Returns_AlreadyRunning()
+    {
+        var app = new global::MyAppMain.MyAppMain();
+        var owner = new ProgrammaticImuController("owner");
+        app.RegisterController(owner);
+
+        try
+        {
+            Assert.IsTrue(await app.StartAsync());
+
+            var first = await owner.StartImuAsync("{}");
+            Assert.AreEqual(ImuControlStatus.Success, first.Status);
+
+            var second = await owner.StartImuAsync("{}");
+            Assert.AreEqual(ImuControlStatus.AlreadyRunning, second.Status);
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
 }
