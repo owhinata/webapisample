@@ -17,14 +17,13 @@ namespace MyAppMain.Tests;
 internal sealed class ScriptedImuScenario : ITestImuScenario
 {
     private bool _imuOn;
-    private bool _sampleSent;
 
     public async Task OnClientConnectedAsync(
         ITestImuConnection connection,
         CancellationToken ct
     )
     {
-        await connection.SendStateAsync(false, ct);
+        await connection.SendStateAsync(_imuOn, ct);
     }
 
     public async Task OnStateChangeRequestedAsync(
@@ -34,15 +33,13 @@ internal sealed class ScriptedImuScenario : ITestImuScenario
     )
     {
         _imuOn = requestedOn;
-        if (!_imuOn)
-            _sampleSent = false;
 
         await connection.SendStateAsync(_imuOn, ct);
     }
 
     public async Task OnTickAsync(ITestImuConnection connection, CancellationToken ct)
     {
-        if (!_imuOn || _sampleSent)
+        if (!_imuOn)
             return;
 
         var timestamp =
@@ -50,7 +47,6 @@ internal sealed class ScriptedImuScenario : ITestImuScenario
             * 1_000_000UL;
         var frame = new ImuSampleFrame(timestamp, 0.1f, 0.2f, 0.3f, 1.0f, 2.0f, 3.0f);
         await connection.SendSampleAsync(frame, ct);
-        _sampleSent = true;
     }
 }
 
