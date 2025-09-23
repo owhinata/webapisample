@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,11 @@ public sealed class ProgrammaticImuController : IAppController, ICommandPipeline
     public string Id { get; }
 
     /// <inheritdoc />
+    [SuppressMessage(
+        "CodeQuality",
+        "CS0067",
+        Justification = "Interface contract requires the event even though commands execute via pipeline access."
+    )]
     public event Action<ModelCommand>? CommandRequested;
 
     /// <summary>
