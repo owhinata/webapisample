@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyNotificationHub;
@@ -12,6 +13,46 @@ using static MyAppMain.Tests.TestHelpers;
 using NotificationHub = MyNotificationHub.MyNotificationHub;
 
 namespace MyAppMain.Tests;
+
+internal sealed class ScriptedImuScenario : ITestImuScenario
+{
+    private bool _imuOn;
+    private bool _sampleSent;
+
+    public async Task OnClientConnectedAsync(
+        ITestImuConnection connection,
+        CancellationToken ct
+    )
+    {
+        await connection.SendStateAsync(false, ct);
+    }
+
+    public async Task OnStateChangeRequestedAsync(
+        ITestImuConnection connection,
+        bool requestedOn,
+        CancellationToken ct
+    )
+    {
+        _imuOn = requestedOn;
+        if (!_imuOn)
+            _sampleSent = false;
+
+        await connection.SendStateAsync(_imuOn, ct);
+    }
+
+    public async Task OnTickAsync(ITestImuConnection connection, CancellationToken ct)
+    {
+        if (!_imuOn || _sampleSent)
+            return;
+
+        var timestamp =
+            (ulong)(DateTime.UtcNow - DateTime.UnixEpoch).TotalMilliseconds
+            * 1_000_000UL;
+        var frame = new ImuSampleFrame(timestamp, 0.1f, 0.2f, 0.3f, 1.0f, 2.0f, 3.0f);
+        await connection.SendSampleAsync(frame, ct);
+        _sampleSent = true;
+    }
+}
 
 [TestClass]
 public class MyAppMainImuFlowTests
@@ -23,7 +64,7 @@ public class MyAppMainImuFlowTests
     public async Task Start_Message_With_Server_Info_Connects_To_TCP_Server()
     {
         // Start test IMU server
-        using var testServer = new TestImuServer();
+        using var testServer = new TestImuServer(() => new ScriptedImuScenario());
         var serverPort = testServer.Start();
 
         // Create hub and event waiters
