@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
 using MyNotificationHub;
-using MyWebApi;
 using static MyAppMain.Tests.TestHelpers;
 using NotificationHub = MyNotificationHub.MyNotificationHub;
 
@@ -32,7 +31,7 @@ public class MyAppMainWebApiTests
         };
         var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
-        app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
+        app.RegisterController(new WebApiController(port));
 
         try
         {
@@ -70,17 +69,21 @@ public class MyAppMainWebApiTests
         var firstRequestEntered = NewTcs<bool>();
         var releaseFirstRequest = NewTcs<bool>();
         var gateFlag = 0;
-        var host = new MyWebApiHost(GetFreeTcpPort());
-        host.StartRequested += _ =>
+        var port = GetFreeTcpPort();
+        var controller = new WebApiController(port);
+        controller.ConfigureHost(host =>
         {
-            if (Interlocked.CompareExchange(ref gateFlag, 1, 0) == 0)
+            host.StartRequested += _ =>
             {
-                firstRequestEntered.TrySetResult(true);
-                releaseFirstRequest.Task.GetAwaiter().GetResult();
-            }
-        };
+                if (Interlocked.CompareExchange(ref gateFlag, 1, 0) == 0)
+                {
+                    firstRequestEntered.TrySetResult(true);
+                    releaseFirstRequest.Task.GetAwaiter().GetResult();
+                }
+            };
+        });
         var app = new global::MyAppMain.MyAppMain(hub);
-        app.RegisterController(new WebApiControllerAdapter(host));
+        app.RegisterController(controller);
 
         try
         {
@@ -88,11 +91,11 @@ public class MyAppMainWebApiTests
             app.Start();
             using var client1 = new HttpClient
             {
-                BaseAddress = new Uri($"http://localhost:{host.Port}"),
+                BaseAddress = new Uri($"http://localhost:{port}"),
             };
             using var client2 = new HttpClient
             {
-                BaseAddress = new Uri($"http://localhost:{host.Port}"),
+                BaseAddress = new Uri($"http://localhost:{port}"),
             };
             var body1 = "{\"message\":\"r1\"}";
             var body2 = "{\"message\":\"r2\"}";
@@ -156,7 +159,7 @@ public class MyAppMainWebApiTests
         };
         var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
-        app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
+        app.RegisterController(new WebApiController(port));
 
         try
         {

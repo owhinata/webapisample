@@ -1,3 +1,4 @@
+using System;
 using MyNotificationHub;
 using MyWebApi;
 
@@ -6,22 +7,19 @@ namespace MyAppMain;
 /// <summary>
 /// Bridges <see cref="MyWebApiHost"/> events to the <see cref="IAppController"/> abstraction.
 /// </summary>
-/// <summary>
-/// Bridges <see cref="MyWebApiHost"/> events to the <see cref="IAppController"/> abstraction.
-/// </summary>
-public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
+public sealed class WebApiController : IAppController, IAsyncDisposable
 {
     private readonly MyWebApiHost _host;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WebApiControllerAdapter"/> class.
+    /// Initializes a new instance of the <see cref="WebApiController"/> class.
     /// </summary>
-    /// <param name="host">Underlying Web API host.</param>
+    /// <param name="port">Port to start the Web API on.</param>
     /// <param name="id">Optional controller identifier.</param>
-    public WebApiControllerAdapter(MyWebApiHost host, string? id = null)
+    public WebApiController(int port, string? id = null)
     {
-        _host = host;
-        Id = id ?? $"webapi:{host.Port}";
+        _host = new MyWebApiHost(port);
+        Id = id ?? $"webapi:{port}";
         _host.StartRequested += body =>
             CommandRequested?.Invoke(
                 new ModelCommand(Id, "start", body, null, DateTimeOffset.UtcNow)
@@ -30,6 +28,15 @@ public sealed class WebApiControllerAdapter : IAppController, IAsyncDisposable
             CommandRequested?.Invoke(
                 new ModelCommand(Id, "end", body, null, DateTimeOffset.UtcNow)
             );
+    }
+
+    /// <summary>
+    /// Allows callers (primarily tests) to configure the underlying host before start.
+    /// </summary>
+    /// <param name="configure">Callback invoked with the underlying host instance.</param>
+    public void ConfigureHost(Action<MyWebApiHost> configure)
+    {
+        configure?.Invoke(_host);
     }
 
     /// <summary>

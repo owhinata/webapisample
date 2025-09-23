@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyNotificationHub;
-using MyWebApi;
 using static MyAppMain.Tests.TestHelpers;
 using NotificationHub = MyNotificationHub.MyNotificationHub;
 
@@ -104,9 +103,7 @@ public class MyAppMainImuFlowTests
         };
         var app = new global::MyAppMain.MyAppMain(hub);
         var apiPort = GetFreeTcpPort();
-        app.RegisterController(
-            new WebApiControllerAdapter(new MyWebApiHost(apiPort))
-        );
+        app.RegisterController(new WebApiController(apiPort));
 
         try
         {

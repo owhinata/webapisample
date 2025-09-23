@@ -9,17 +9,17 @@ using NotificationHub = MyNotificationHub.MyNotificationHub;
 namespace MyAppMain.Tests;
 
 [TestClass]
-public class MyAppMainProgrammaticControllerTests
+public class MyAppMainDirectApiControllerTests
 {
     /// <summary>
-    /// Ensures the programmatic controller can start and stop the IMU.
+    /// Ensures the direct API controller can start and stop the IMU.
     /// </summary>
     [TestMethod]
-    public async Task Programmatic_Controller_Starts_And_Stops_IMU()
+    public async Task Direct_Controller_Starts_And_Stops_IMU()
     {
         var hub = new NotificationHub();
         var app = new global::MyAppMain.MyAppMain(hub);
-        var controller = new ProgrammaticImuController("ctrl1");
+        var controller = new DirectApiController("ctrl1");
         app.RegisterController(controller);
 
         try
@@ -49,12 +49,12 @@ public class MyAppMainProgrammaticControllerTests
     /// Validates that only the owning controller can stop or restart the IMU.
     /// </summary>
     [TestMethod]
-    public async Task Only_Owner_Can_Control_IMU()
+    public async Task Direct_Controller_Respects_Ownership()
     {
         var hub = new NotificationHub();
         var app = new global::MyAppMain.MyAppMain(hub);
-        var owner = new ProgrammaticImuController("owner");
-        var other = new ProgrammaticImuController("other");
+        var owner = new DirectApiController("owner");
+        var other = new DirectApiController("other");
         app.RegisterController(owner);
         app.RegisterController(other);
 
@@ -107,12 +107,12 @@ public class MyAppMainProgrammaticControllerTests
     /// Confirms ownership is cleared when the owning controller is unregistered.
     /// </summary>
     [TestMethod]
-    public async Task Ownership_Clears_When_Owner_Unregistered()
+    public async Task Ownership_Clears_When_Direct_Controller_Unregistered()
     {
         var hub = new NotificationHub();
         var app = new global::MyAppMain.MyAppMain(hub);
-        var owner = new ProgrammaticImuController("owner");
-        var other = new ProgrammaticImuController("other");
+        var owner = new DirectApiController("owner");
+        var other = new DirectApiController("other");
         app.RegisterController(owner);
         app.RegisterController(other);
 
@@ -142,11 +142,11 @@ public class MyAppMainProgrammaticControllerTests
     /// Returns AlreadyRunning when the owning controller issues Start again.
     /// </summary>
     [TestMethod]
-    public async Task Owner_Start_Twice_Returns_AlreadyRunning()
+    public async Task Direct_Controller_Start_Twice_Returns_AlreadyRunning()
     {
         var hub = new NotificationHub();
         var app = new global::MyAppMain.MyAppMain(hub);
-        var owner = new ProgrammaticImuController("owner");
+        var owner = new DirectApiController("owner");
         app.RegisterController(owner);
 
         try
@@ -173,11 +173,11 @@ public class MyAppMainProgrammaticControllerTests
     /// Ensures synchronous control helpers enqueue commands successfully.
     /// </summary>
     [TestMethod]
-    public async Task Programmatic_Controller_Sync_Methods_Work()
+    public async Task Direct_Controller_Sync_Methods_Work()
     {
         var hub = new NotificationHub();
         var app = new global::MyAppMain.MyAppMain(hub);
-        var controller = new ProgrammaticImuController("ctrl-sync");
+        var controller = new DirectApiController("ctrl-sync");
         app.RegisterController(controller);
 
         try

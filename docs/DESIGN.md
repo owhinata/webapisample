@@ -28,7 +28,7 @@ public interface IAppController
     Task<bool> StopAsync(CancellationToken ct = default);
 }
 ```
-既存の`MyWebApiHost`は、薄いアダプタ（例: `WebApiControllerAdapter`）で`IAppController`に適合させ、
+既存の`MyWebApiHost`は、薄いアダプタ（例: `WebApiController`）で`IAppController`に適合させ、
 `/v1/start`や`/v1/end`のPOST受信時に`CommandRequested`を発火する。
 
 ### WebAPI をアダプタにする理由
@@ -94,8 +94,7 @@ public record ModelResult(
 ```csharp
 // Web API を利用する場合
 var app = new MyAppMain();
-var host = new MyWebApiHost(port: 5008);
-app.RegisterController(new WebApiControllerAdapter(host));
+app.RegisterController(new WebApiController(port: 5008));
 app.Start();
 
 // ビュー（UI）を購読させるケース
@@ -108,7 +107,7 @@ junction.ResultPublished += result =>
     }
 };
 var app2 = new MyAppMain(junction);
-app2.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(5008)));
+app2.RegisterController(new WebApiController(5008));
 app2.Start();
 
 // 停止
@@ -149,7 +148,7 @@ public async Task Posting_Start_Triggers_External_Handler()
     junction.StartRequested += json => startTcs.TrySetResult(json);
     var app = new MyAppMain(junction);
     var port = GetFreePort();
-    app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
+    app.RegisterController(new WebApiController(port));
     try
     {
         app.Start();

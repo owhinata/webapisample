@@ -6,7 +6,7 @@ MyWebApi、MyAppMain、MyNotificationHub からなる .NET 8 ベースのイベ�
 ## 主な機能
 - イベントドリブン Web API: `/v1/start` と `/v1/end` を提供し、成功時は 200 OK、同時実行 1 件を超えると 429 を返却
 - グローバルレート制限: ASP.NET Core の `PartitionedRateLimiter` で同時処理数を 1 に固定し、キューは未使用
-- コントローラ拡張性: `IAppController` 抽象を介して Web API やプログラム制御など複数コントローラを登録可能
+- コントローラ拡張性: `IAppController` 抽象を介して Web API や直接制御など複数コントローラを登録可能
 - コマンドパイプライン: バックグラウンドで `ModelCommand` を処理し、相関 ID ごとの `ModelResult` を解決
 - IMU TCP クライアント: `ImuClient` が接続、状態確認、データ受信を担い、通知ハブへ同期イベントを発火
 - 通知ハブ: `MyNotificationHub` が Start/End、IMU 接続・状態・サンプル、コマンド結果イベントを提供
@@ -134,7 +134,7 @@ curl -X POST http://localhost:5008/v1/start \
 | POST     | `/v1/end`   | IMU 接続の停止要求     | `{"message":"ended"}`   | レート超過時は 429 |
 
 ## アーキテクチャ概要
-- Controller: `WebApiControllerAdapter` などが外部入力を `ModelCommand` に変換
+- Controller: `WebApiController` や `DirectApiController` などが外部入力を `ModelCommand` に変換
 - Model: `MyAppMain` がコントローラの起動・停止、IMU 接続、コマンド処理を実行
 - View: `MyNotificationHub` の購読者が `ResultPublished` や IMU イベントを受信
 - 詳細な設計とデータフローは `docs/DESIGN.md` を参照
@@ -217,7 +217,7 @@ dotnet --list-runtimes
 ```bash
 # 解決方法
 # Web API ホストを生成する際に別ポートを指定
-// 例: app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(5009)));
+// 例: app.RegisterController(new WebApiController(5009));
 ```
 
 #### ビルドエラー

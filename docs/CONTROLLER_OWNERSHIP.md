@@ -45,7 +45,7 @@
 - 所有権の問い合わせ API は提供しない。
 
 ## テスト戦略
-- `MyAppMainProgrammaticControllerTests` でプログラム制御コントローラの挙動を検証し、成功パス・所有権競合・登録解除後の再取得までカバーする。
+- `MyAppMainDirectApiControllerTests` で直接制御コントローラの挙動を検証し、成功パス・所有権競合・登録解除後の再取得までカバーする。
 - 既存の Web API 経由のブラックボックス テストで CommandPipeline 経由の処理順序とレートリミットを担保する。
 - 将来的に新しいコントローラを追加する場合は、所有権エラーや冪等性を確認するユニットテストを同等に追加する。
 - IMU クライアントの統合テストはテストサーバ（`TestImuServer`）を用い、ON/OFF の通知順とサンプル配信を継続的にモニターする。
@@ -55,6 +55,6 @@
 - 仕様変更時には本書を更新すること。
 
 ## 実装メモ
-- Web API 以外から直接制御したい場合は `ProgrammaticImuController` を利用できる。
+- Web API 以外から直接制御したい場合は `DirectApiController` を利用できる。
 - `StartImu` / `StartImuAsync` および `StopImu` / `StopImuAsync` は要求を受け付けたかどうか（`bool`）のみ返し、詳細な結果は `MyNotificationHub.ResultPublished` で購読する。
   - `MyAppMain.RegisterController` 後に呼び出すことで、CommandPipeline の逐次処理と所有権ルールの統一を保つ。

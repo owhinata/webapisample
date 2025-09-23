@@ -7,17 +7,18 @@ using MyNotificationHub;
 namespace MyAppMain;
 
 /// <summary>
-/// Provides programmatic start/stop access to the IMU through <see cref="MyAppMain"/>.
+/// Provides direct (in-process) start/stop access to the IMU through
+/// <see cref="MyAppMain"/>.
 /// </summary>
-public sealed class ProgrammaticImuController : IAppController
+public sealed class DirectApiController : IAppController
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="ProgrammaticImuController"/> class.
+    /// Initializes a new instance of the <see cref="DirectApiController"/> class.
     /// </summary>
     /// <param name="id">Optional controller identifier.</param>
-    public ProgrammaticImuController(string? id = null)
+    public DirectApiController(string? id = null)
     {
-        Id = id ?? $"programmatic:{Guid.NewGuid():N}";
+        Id = id ?? $"direct:{Guid.NewGuid():N}";
     }
 
     /// <inheritdoc />
