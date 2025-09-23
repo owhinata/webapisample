@@ -169,6 +169,37 @@ public class MyAppMainProgrammaticControllerTests
         }
     }
 
+    /// <summary>
+    /// Ensures synchronous control helpers enqueue commands successfully.
+    /// </summary>
+    [TestMethod]
+    public async Task Programmatic_Controller_Sync_Methods_Work()
+    {
+        var hub = new NotificationHub();
+        var app = new global::MyAppMain.MyAppMain(hub);
+        var controller = new ProgrammaticImuController("ctrl-sync");
+        app.RegisterController(controller);
+
+        try
+        {
+            Assert.IsTrue(await app.StartAsync());
+
+            var startTask = WaitForResultAsync(hub, controller.Id, "start");
+            Assert.IsTrue(controller.StartImu("{}"));
+            var start = await WaitAsync(startTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(start));
+
+            var stopTask = WaitForResultAsync(hub, controller.Id, "end");
+            Assert.IsTrue(controller.StopImu());
+            var stop = await WaitAsync(stopTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(stop));
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
     private static Task<ModelResult> WaitForResultAsync(
         NotificationHub hub,
         string controllerId,

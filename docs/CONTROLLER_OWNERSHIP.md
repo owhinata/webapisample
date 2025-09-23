@@ -56,5 +56,5 @@
 
 ## 実装メモ
 - Web API 以外から直接制御したい場合は `ProgrammaticImuController` を利用できる。
-- `StartImuAsync` / `StopImuAsync` は要求を受け付けたかどうか（`bool`）のみ返し、詳細な結果は `MyNotificationHub.ResultPublished` で購読する。
+- `StartImu` / `StartImuAsync` および `StopImu` / `StopImuAsync` は要求を受け付けたかどうか（`bool`）のみ返し、詳細な結果は `MyNotificationHub.ResultPublished` で購読する。
   - `MyAppMain.RegisterController` 後に呼び出すことで、CommandPipeline の逐次処理と所有権ルールの統一を保つ。

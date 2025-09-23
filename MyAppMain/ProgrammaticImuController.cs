@@ -40,6 +40,15 @@ public sealed class ProgrammaticImuController : IAppController
     }
 
     /// <summary>
+    /// Starts the IMU using an address/port payload synchronously.
+    /// </summary>
+    public bool StartImu(string address, int port)
+    {
+        var payload = JsonSerializer.Serialize(new { address, port });
+        return StartImu(payload);
+    }
+
+    /// <summary>
     /// Starts the IMU with a caller-provided payload.
     /// </summary>
     public Task<bool> StartImuAsync(
@@ -59,6 +68,14 @@ public sealed class ProgrammaticImuController : IAppController
     }
 
     /// <summary>
+    /// Starts the IMU synchronously with a caller-provided payload.
+    /// </summary>
+    public bool StartImu(string payloadJson)
+    {
+        return StartImuAsync(payloadJson).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
     /// Stops the IMU.
     /// </summary>
     public Task<bool> StopImuAsync(CancellationToken ct = default)
@@ -72,6 +89,14 @@ public sealed class ProgrammaticImuController : IAppController
 
         handler(CreateCommand("end", "{}"));
         return Task.FromResult(true);
+    }
+
+    /// <summary>
+    /// Stops the IMU synchronously.
+    /// </summary>
+    public bool StopImu()
+    {
+        return StopImuAsync().GetAwaiter().GetResult();
     }
 
     /// <inheritdoc />
