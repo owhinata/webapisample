@@ -40,6 +40,7 @@ public interface IAppController
 - 責務分離と再利用性:
   - Host は「エンドポイント/レート制限/イベント発火」に専念。
   - 入力の正規化や相関ID付与などアプリ固有の変換はアダプタで行う。
+  - Host はポートをコンストラクタで受け取り、アダプタはそれを `MyAppMain` に登録するだけ。
 - 破壊的変更の回避:
   - Host の公開API（イベント）を保ちつつ拡張できる。
   - Host を `IAppController` 化すると公開APIに抽象が混ざる。
@@ -69,14 +70,8 @@ public record ModelResult(
     DateTimeOffset CompletedAt);
 ```
 
-`MyAppNotificationHub`は「結果通知」のイベントを提供する。
-```csharp
-public sealed class MyAppNotificationHub
-{
-    public event Action<ModelResult>? StartCompleted; // 同期イベント
-    public event Action<ModelResult>? EndCompleted;   // 同期イベント
-}
-```
+`MyAppNotificationHub`は「コマンド要求（Start/End）」と「処理結果（ModelResult）」のイベントを提供する。
+結果通知は `ResultPublished` 1 本に統一され、購読側が `ModelResult.Type` を見て分岐する。
 
 ## データフロー
 1. コントローラが外部入力を受け取り`ModelCommand`を発火
@@ -105,7 +100,13 @@ app.Start();
 
 // ビュー（UI）を購読させるケース
 var junction = new MyAppNotificationHub.MyAppNotificationHub();
-junction.StartCompleted += result => {/* 更新処理 */};
+junction.ResultPublished += result =>
+{
+    if (result.Type == "start")
+    {
+        /* 更新処理 */
+    }
+};
 var app2 = new MyAppMain(junction);
 app2.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(5008)));
 app2.Start();
@@ -127,7 +128,7 @@ app.Stop();
 - テストプロジェクト`MyAppMain.Tests`はMSTestを使用
 - `MyAppMain`を空いているポートで開始
 - コントローラ（WebAPI）経由でコマンド送信
-- `MyAppNotificationHub`の結果イベント`StartCompleted/EndCompleted`を購読し`ModelResult`を検証
+- `MyAppNotificationHub.ResultPublished` を購読し `ModelResult` を検証
 - `TcpListener`をポート0にバインドして空いているポートを割り当てるヘルパーを使用
 
 ## IMU 連携の詳細設計
