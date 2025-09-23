@@ -145,26 +145,13 @@ internal sealed class CommandPipeline : IAsyncDisposable
                     if (result is null)
                         continue;
 
-                    DispatchResult(result);
+                    _notificationHub?.NotifyResult(result);
                 }
             }
         }
         catch (OperationCanceledException)
         {
             // Graceful shutdown
-        }
-    }
-
-    private void DispatchResult(MyAppNotificationHub.ModelResult result)
-    {
-        switch (result.Type)
-        {
-            case "start":
-                _notificationHub?.NotifyStartCompleted(result);
-                break;
-            case "end":
-                _notificationHub?.NotifyEndCompleted(result);
-                break;
         }
     }
 }

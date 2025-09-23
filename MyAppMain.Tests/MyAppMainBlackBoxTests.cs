@@ -24,7 +24,11 @@ public class MyAppMainBlackBoxTests
     {
         var tcs = NewTcs<MyAppNotificationHub.ModelResult>();
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
-        hub.StartCompleted += result => tcs.TrySetResult(result);
+        hub.ResultPublished += result =>
+        {
+            if (result.Type == "start")
+                tcs.TrySetResult(result);
+        };
         var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
         app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
@@ -144,7 +148,11 @@ public class MyAppMainBlackBoxTests
     {
         var tcs = NewTcs<MyAppNotificationHub.ModelResult>();
         var hub = new MyAppNotificationHub.MyAppNotificationHub();
-        hub.EndCompleted += result => tcs.TrySetResult(result);
+        hub.ResultPublished += result =>
+        {
+            if (result.Type == "end")
+                tcs.TrySetResult(result);
+        };
         var app = new global::MyAppMain.MyAppMain(hub);
         var port = GetFreeTcpPort();
         app.RegisterController(new WebApiControllerAdapter(new MyWebApiHost(port)));
@@ -217,9 +225,9 @@ public class MyAppMainBlackBoxTests
         var imuSample = NewTcs<bool>();
         var sampleBeforeOn = NewTcs<bool>();
         var stateNotifications = new List<bool>();
-        hub2.StartCompleted += res =>
+        hub2.ResultPublished += res =>
         {
-            if (res.Success)
+            if (res.Type == "start" && res.Success)
                 startDone.TrySetResult(true);
         };
         hub2.ImuConnected += _ => connected.TrySetResult(true);

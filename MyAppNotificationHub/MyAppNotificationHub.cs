@@ -10,16 +10,6 @@ namespace MyAppNotificationHub;
 public class MyAppNotificationHub
 {
     /// <summary>
-    /// Raised when a start command finishes processing.
-    /// </summary>
-    public event Action<ModelResult>? StartCompleted;
-
-    /// <summary>
-    /// Raised when an end command finishes processing.
-    /// </summary>
-    public event Action<ModelResult>? EndCompleted;
-
-    /// <summary>
     /// Raised when MyAppMain reports a start event. Invoked synchronously.
     /// </summary>
     public event Action<string>? StartRequested;
@@ -48,18 +38,6 @@ public class MyAppNotificationHub
     }
 
     // Public helpers for model to raise results
-    /// <summary>
-    /// Notifies subscribers that a start command has completed.
-    /// </summary>
-    public void NotifyStartCompleted(ModelResult result) =>
-        StartCompleted?.Invoke(result);
-
-    /// <summary>
-    /// Notifies subscribers that an end command has completed.
-    /// </summary>
-    public void NotifyEndCompleted(ModelResult result) =>
-        EndCompleted?.Invoke(result);
-
     // IMU notifications
     /// <summary>
     /// Describes an IMU connection state change.
@@ -123,4 +101,18 @@ public class MyAppNotificationHub
     /// Notifies subscribers of a new IMU sample.
     /// </summary>
     public void NotifyImuSample(ImuSampleDto dto) => ImuSampleReceived?.Invoke(dto);
+
+    /// <summary>
+    /// Dispatches a <see cref="ModelResult"/> to the appropriate completion event.
+    /// </summary>
+    /// <param name="result">The result produced by the command pipeline.</param>
+    public void NotifyResult(ModelResult result)
+    {
+        ResultPublished?.Invoke(result);
+    }
+
+    /// <summary>
+    /// Raised when any command finishes processing and a <see cref="ModelResult"/> is available.
+    /// </summary>
+    public event Action<ModelResult>? ResultPublished;
 }
