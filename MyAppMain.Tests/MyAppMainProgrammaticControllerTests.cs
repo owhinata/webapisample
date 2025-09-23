@@ -1,6 +1,10 @@
+using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using MyAppMain;
+using MyNotificationHub;
+using static MyAppMain.Tests.TestHelpers;
+using NotificationHub = MyNotificationHub.MyNotificationHub;
 
 namespace MyAppMain.Tests;
 
@@ -13,7 +17,8 @@ public class MyAppMainProgrammaticControllerTests
     [TestMethod]
     public async Task Programmatic_Controller_Starts_And_Stops_IMU()
     {
-        var app = new global::MyAppMain.MyAppMain();
+        var hub = new NotificationHub();
+        var app = new global::MyAppMain.MyAppMain(hub);
         var controller = new ProgrammaticImuController("ctrl1");
         app.RegisterController(controller);
 
@@ -21,11 +26,18 @@ public class MyAppMainProgrammaticControllerTests
         {
             Assert.IsTrue(await app.StartAsync());
 
-            var start = await controller.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.Success, start.Status);
+            var startResultTask = WaitForResultAsync(hub, controller.Id, "start");
+            Assert.IsTrue(await controller.StartImuAsync("{}"));
+            var startResult = await WaitAsync(
+                startResultTask,
+                TimeSpan.FromSeconds(3)
+            );
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(startResult));
 
-            var stop = await controller.StopImuAsync();
-            Assert.AreEqual(ImuControlStatus.Success, stop.Status);
+            var stopResultTask = WaitForResultAsync(hub, controller.Id, "end");
+            Assert.IsTrue(await controller.StopImuAsync());
+            var stopResult = await WaitAsync(stopResultTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(stopResult));
         }
         finally
         {
@@ -39,7 +51,8 @@ public class MyAppMainProgrammaticControllerTests
     [TestMethod]
     public async Task Only_Owner_Can_Control_IMU()
     {
-        var app = new global::MyAppMain.MyAppMain();
+        var hub = new NotificationHub();
+        var app = new global::MyAppMain.MyAppMain(hub);
         var owner = new ProgrammaticImuController("owner");
         var other = new ProgrammaticImuController("other");
         app.RegisterController(owner);
@@ -49,20 +62,40 @@ public class MyAppMainProgrammaticControllerTests
         {
             Assert.IsTrue(await app.StartAsync());
 
-            var startOwner = await owner.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.Success, startOwner.Status);
+            var ownerStartTask = WaitForResultAsync(hub, owner.Id, "start");
+            Assert.IsTrue(await owner.StartImuAsync("{}"));
+            var ownerStart = await WaitAsync(ownerStartTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(ownerStart));
 
-            var stopOther = await other.StopImuAsync();
-            Assert.AreEqual(ImuControlStatus.OwnershipError, stopOther.Status);
+            var otherStopTask = WaitForResultAsync(hub, other.Id, "end");
+            Assert.IsTrue(await other.StopImuAsync());
+            var otherStop = await WaitAsync(otherStopTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.OwnershipError, GetStatus(otherStop));
 
-            var startOther = await other.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.OwnershipError, startOther.Status);
+            var otherStartTask = WaitForResultAsync(hub, other.Id, "start");
+            Assert.IsTrue(await other.StartImuAsync("{}"));
+            var otherStart = await WaitAsync(otherStartTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.OwnershipError, GetStatus(otherStart));
 
-            var stopOwner = await owner.StopImuAsync();
-            Assert.AreEqual(ImuControlStatus.Success, stopOwner.Status);
+            var ownerStopTask = WaitForResultAsync(hub, owner.Id, "end");
+            Assert.IsTrue(await owner.StopImuAsync());
+            var ownerStop = await WaitAsync(ownerStopTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(ownerStop));
 
-            var startOtherAfterRelease = await other.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.Success, startOtherAfterRelease.Status);
+            var otherStartAfterReleaseTask = WaitForResultAsync(
+                hub,
+                other.Id,
+                "start"
+            );
+            Assert.IsTrue(await other.StartImuAsync("{}"));
+            var otherStartAfterRelease = await WaitAsync(
+                otherStartAfterReleaseTask,
+                TimeSpan.FromSeconds(3)
+            );
+            Assert.AreEqual(
+                ImuControlStatus.Success,
+                GetStatus(otherStartAfterRelease)
+            );
         }
         finally
         {
@@ -76,7 +109,8 @@ public class MyAppMainProgrammaticControllerTests
     [TestMethod]
     public async Task Ownership_Clears_When_Owner_Unregistered()
     {
-        var app = new global::MyAppMain.MyAppMain();
+        var hub = new NotificationHub();
+        var app = new global::MyAppMain.MyAppMain(hub);
         var owner = new ProgrammaticImuController("owner");
         var other = new ProgrammaticImuController("other");
         app.RegisterController(owner);
@@ -86,13 +120,17 @@ public class MyAppMainProgrammaticControllerTests
         {
             Assert.IsTrue(await app.StartAsync());
 
-            var startOwner = await owner.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.Success, startOwner.Status);
+            var ownerStartTask = WaitForResultAsync(hub, owner.Id, "start");
+            Assert.IsTrue(await owner.StartImuAsync("{}"));
+            var ownerStart = await WaitAsync(ownerStartTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(ownerStart));
 
             Assert.IsTrue(app.UnregisterController(owner));
 
-            var stopOther = await other.StopImuAsync();
-            Assert.AreEqual(ImuControlStatus.Success, stopOther.Status);
+            var otherStopTask = WaitForResultAsync(hub, other.Id, "end");
+            Assert.IsTrue(await other.StopImuAsync());
+            var otherStop = await WaitAsync(otherStopTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(otherStop));
         }
         finally
         {
@@ -106,7 +144,8 @@ public class MyAppMainProgrammaticControllerTests
     [TestMethod]
     public async Task Owner_Start_Twice_Returns_AlreadyRunning()
     {
-        var app = new global::MyAppMain.MyAppMain();
+        var hub = new NotificationHub();
+        var app = new global::MyAppMain.MyAppMain(hub);
         var owner = new ProgrammaticImuController("owner");
         app.RegisterController(owner);
 
@@ -114,15 +153,51 @@ public class MyAppMainProgrammaticControllerTests
         {
             Assert.IsTrue(await app.StartAsync());
 
-            var first = await owner.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.Success, first.Status);
+            var firstTask = WaitForResultAsync(hub, owner.Id, "start");
+            Assert.IsTrue(await owner.StartImuAsync("{}"));
+            var first = await WaitAsync(firstTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.Success, GetStatus(first));
 
-            var second = await owner.StartImuAsync("{}");
-            Assert.AreEqual(ImuControlStatus.AlreadyRunning, second.Status);
+            var secondTask = WaitForResultAsync(hub, owner.Id, "start");
+            Assert.IsTrue(await owner.StartImuAsync("{}"));
+            var second = await WaitAsync(secondTask, TimeSpan.FromSeconds(3));
+            Assert.AreEqual(ImuControlStatus.AlreadyRunning, GetStatus(second));
         }
         finally
         {
             await app.DisposeAsync();
         }
+    }
+
+    private static Task<ModelResult> WaitForResultAsync(
+        NotificationHub hub,
+        string controllerId,
+        string type
+    )
+    {
+        var tcs = NewTcs<ModelResult>();
+
+        void Handler(ModelResult result)
+        {
+            if (result.ControllerId == controllerId && result.Type == type)
+            {
+                hub.ResultPublished -= Handler;
+                tcs.TrySetResult(result);
+            }
+        }
+
+        hub.ResultPublished += Handler;
+        return tcs.Task;
+    }
+
+    private static ImuControlStatus GetStatus(ModelResult result)
+    {
+        Assert.IsNotNull(result.Payload, "Expected IMU payload to be present.");
+        var statusProperty = result.Payload?.GetType().GetProperty("Status");
+        Assert.IsNotNull(
+            statusProperty,
+            "Expected payload to expose Status property."
+        );
+        return (ImuControlStatus)(statusProperty?.GetValue(result.Payload) ?? 0);
     }
 }

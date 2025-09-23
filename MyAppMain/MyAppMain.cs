@@ -173,9 +173,6 @@ public sealed class MyAppMain : IAsyncDisposable
         _controllers.Add(controller);
         controller.CommandRequested -= HandleControllerCommandRequested;
         controller.CommandRequested += HandleControllerCommandRequested;
-
-        if (controller is ICommandPipelineAware aware)
-            aware.AttachPipeline(_commandPipeline);
     }
 
     /// <summary>
@@ -193,9 +190,6 @@ public sealed class MyAppMain : IAsyncDisposable
             return false;
 
         controller.CommandRequested -= HandleControllerCommandRequested;
-        if (controller is ICommandPipelineAware aware)
-            aware.DetachPipeline(_commandPipeline);
-
         _commandHandler.ReleaseOwnership(controller.Id);
         return true;
     }
