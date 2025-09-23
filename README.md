@@ -1,12 +1,37 @@
-# 新規開発者のオンボーディングガイド
+# MyWebApi / MyAppMain
 
 ## 概要
-このガイドは、新しい開発者が MyWebApi + MyAppMain プロジェクトに迅速に参加できるよう設計されています。.NET 8 ベースのイベント駆動アーキテクチャを持つ自己完結型Web APIプロジェクトです。
+MyWebApi、MyAppMain、MyNotificationHub からなる .NET 8 ベースのイベント駆動アプリケーションです。自己ホスト型 Web API を介して IMU 制御コマンドを受け付け、MyAppMain が TCP 経由で IMU と連携し、結果を通知ハブ経由で外部購読者へ配信します。
 
----
+## 主な機能
+- イベントドリブン Web API: `/v1/start` と `/v1/end` を提供し、成功時は 200 OK、同時実行 1 件を超えると 429 を返却
+- グローバルレート制限: ASP.NET Core の `PartitionedRateLimiter` で同時処理数を 1 に固定し、キューは未使用
+- コントローラ拡張性: `IAppController` 抽象を介して Web API やプログラム制御など複数コントローラを登録可能
+- コマンドパイプライン: バックグラウンドで `ModelCommand` を処理し、相関 ID ごとの `ModelResult` を解決
+- IMU TCP クライアント: `ImuClient` が接続、状態確認、データ受信を担い、通知ハブへ同期イベントを発火
+- 通知ハブ: `MyNotificationHub` が Start/End、IMU 接続・状態・サンプル、コマンド結果イベントを提供
 
-## 1. 環境セットアップ
+## リポジトリ構成
+```
+webapisample/
+├── MyWebApi/             # 自己ホスト型 Web API
+│   ├── MyWebApiHost.cs
+│   └── MyWebApi.csproj
+├── MyAppMain/            # アプリケーション本体と IMU 制御
+│   ├── MyAppMain.cs
+│   ├── CommandPipeline.cs など
+│   └── MyAppMain.csproj
+├── MyNotificationHub/    # 通知ハブライブラリ
+│   ├── MyNotificationHub.cs
+│   └── MyNotificationHub.csproj
+├── MyAppMain.Tests/      # MSTest ベースのブラックボックステスト
+├── docs/                 # 設計ドキュメント (DESIGN.md, IMU_DESIGN.md)
+├── scripts/              # 開発支援スクリプト
+├── README.md
+└── LICENSE
+```
 
+## セットアップ
 ### 必要なツールのインストール
 
 #### ✅ .NET 8 SDK
@@ -44,72 +69,7 @@ brew install --cask dotnet-aspnetcore
 sudo apt-get install -y aspnetcore-runtime-8.0
 ```
 
-#### ✅ 推奨IDE・エディタ
-- **Visual Studio 2022** (Windows) - Community版で十分
-- **Visual Studio Code** + C# Dev Kit 拡張機能
-- **JetBrains Rider** (クロスプラットフォーム)
-
-#### ✅ Git設定
-```bash
-# Git設定
-git config --global user.name "Your Name"
-git config --global user.email "your.email@example.com"
-
-# SSH鍵生成（GitHub使用の場合）
-ssh-keygen -t ed25519 -C "your.email@example.com"
-# 公開鍵をGitHubに追加
-```
-
----
-
-## 2. プロジェクトの把握
-
-### プロジェクト構成の理解
-
-#### 📁 ディレクトリ構造
-```
-webaipsv/
-├── MyWebApi/              # Web API ホスト
-│   ├── MyWebApiHost.cs    # メインクラス
-│   └── MyWebApi.csproj    # プロジェクトファイル
-├── MyAppMain/             # オーケストレーター
-│   ├── MyAppMain.cs       # メインロジック
-│   └── MyAppMain.csproj   # プロジェクトファイル
-├── MyNotificationHub/     # 外部通知用イベントハブ
-│   ├── MyNotificationHub.cs   # ハブクラス
-│   └── MyNotificationHub.csproj # プロジェクトファイル
-├── MyAppMain.Tests/       # テストプロジェクト
-│   ├── MyAppMainBlackBoxTests.cs
-│   └── MyAppMain.Tests.csproj
-├── docs/                  # ドキュメント
-│   └── DESIGN.md          # アーキテクチャ設計
-├── .cursor/               # Cursor設定
-│   └── rules              # コーディング規約
-├── README.md              # プロジェクト概要
-└── AGENT.md               # 開発ガイドライン
-```
-
-#### 🏗️ アーキテクチャ概要
-- **MVC構成**: Controller（WebAPI ほか拡張可）/ Model（MyAppMain）/ View（MyNotificationHub購読者）
-- **複数コントローラ対応**: 将来的にCLIやMQ等のコントローラ追加が可能
-- **処理結果通知**: モデル処理完了後にのみ`MyNotificationHub`経由でビューへ通知
-- **コンテキスト分離**: コントローラ処理とビュー通知は別スレッドで分離
-- **レート制限**: 1同時接続制限でDDoS攻撃を防止
-- **バージョニング**: `/v1` ルートグループでAPIバージョン管理
-- **起動/停止API**: `MyWebApiHost` は `StartAsync/StopAsync` のみを公開（同期APIは `MyAppMain.Start/Stop` を利用）
-
-### 主要ドキュメントの読書
-
-#### 📚 必須読書リスト
-1. **README.md** - プロジェクト概要とクイックスタート
-2. **docs/DESIGN.md** - アーキテクチャと設計思想
-3. **docs/IMU_DESIGN.md** - IMU サーバ連携プロトコル/設計/テスト方針（テスト用）
-3. **AGENT.md** - コーディング規約と開発ワークフロー
-4. **.cursor/rules** - プロジェクト固有のルール
-
----
-
-## 3. 開発環境のセットアップ
+## クイックスタート
 
 ### リポジトリのクローンとビルド
 
@@ -130,7 +90,7 @@ dotnet build MyAppMain -c Release
 dotnet build MyNotificationHub -c Release
 ```
 
-### テストの実行
+## 実行とテスト
 
 ```bash
 # 全テスト実行
@@ -160,61 +120,26 @@ dotnet watch run --project MyAppMain
 
 ```
 
----
-
-## 4. 初回動作確認
-
-### エンドポイントのテスト
-
+### API 呼び出し例
 ```bash
-# アプリケーション起動後、別ターミナルで実行
-
-# Start エンドポイントのテスト
 curl -X POST http://localhost:5008/v1/start \
   -H "Content-Type: application/json" \
-  -d '{"message":"hello","address":"127.0.0.1","port":8080}'
-
-# End エンドポイントのテスト
-curl -X POST http://localhost:5008/v1/end \
-  -H "Content-Type: application/json" \
-  -d '{"message":"bye"}'
-
-# レート制限のテスト（同時に複数リクエスト）
-curl -X POST http://localhost:5008/v1/start \
-  -H "Content-Type: application/json" \
-  -d '{"message":"test1"}' &
-curl -X POST http://localhost:5008/v1/start \
-  -H "Content-Type: application/json" \
-  -d '{"message":"test2"}'
+  -d '{"address":"localhost","port":12345}'
 ```
 
-### 期待される動作
-- **成功時**: `200 OK` レスポンス
-- **レート制限時**: `429 Too Many Requests` レスポンス
-- **TCP接続**: JSONに`address`と`port`が含まれる場合、TCPサーバーに接続
+## API エンドポイント
+| メソッド | パス        | 説明                   | 成功レスポンス            | エラー |
+|----------|-------------|------------------------|---------------------------|--------|
+| POST     | `/v1/start` | IMU 接続の開始要求     | `{"message":"started"}` | レート超過時は 429 |
+| POST     | `/v1/end`   | IMU 接続の停止要求     | `{"message":"ended"}`   | レート超過時は 429 |
 
----
+## アーキテクチャ概要
+- Controller: `WebApiControllerAdapter` などが外部入力を `ModelCommand` に変換
+- Model: `MyAppMain` がコントローラの起動・停止、IMU 接続、コマンド処理を実行
+- View: `MyNotificationHub` の購読者が `ResultPublished` や IMU イベントを受信
+- 詳細な設計とデータフローは `docs/DESIGN.md` を参照
 
-## 5. 開発ワークフロー
-
-### コーディング規約
-
-#### C# スタイル
-- **インデント**: 4スペース
-- **名前空間**: ファイルスコープ名前空間
-- **行長**: 1行は最大86文字（`.editorconfig`で設定。長文は手動で改行）
-- **フォーマッタ**: CSharpier（printWidth=86、`.csharpierrc.json`）。`dotnet format`は
-  補助として併用可能（自動折返しはCSharpierが担当）。
-- **命名規則**: 
-  - PascalCase: 型、メソッド、プロパティ、イベント
-  - camelCase: ローカル変数、パラメータ
-  - インターフェース: `I` プレフィックス
-
-#### プロジェクト構造
-- 1ファイルに1つのトップレベル型
-- 機能別にファイルをグループ化
-- コントローラーは `Controllers/` ディレクトリ
-- 共有サービスは `Services/` ディレクトリ
+## 開発ワークフロー
 
 ### Git ワークフロー
 
@@ -276,54 +201,10 @@ fix/rate-limiting-issue
 docs/api-documentation
 ```
 
----
-
-## オンボーディングチェックリスト
-
-### ✅ 環境セットアップ
-- [ ] .NET 8 SDK がインストール済み (`dotnet --version` で確認)
-- [ ] ASP.NET Core ランタイムがインストール済み (`dotnet --list-runtimes` で確認)
-- [ ] 推奨IDE・エディタがセットアップ済み
-- [ ] Git設定が完了済み
-- [ ] SSH鍵が設定済み（GitHub使用の場合）
-
-### ✅ プロジェクト理解
-- [ ] プロジェクト構成を理解済み
-- [ ] アーキテクチャの基本概念を把握済み
-- [ ] 主要ドキュメントを読了済み
-- [ ] イベント駆動設計の仕組みを理解済み
-
-### ✅ 開発環境
-- [ ] リポジトリをクローン済み
-- [ ] 依存関係の復元が完了済み
-- [ ] 全プロジェクトのビルドが成功
-- [ ] 全テストがパスしている
-- [ ] ローカルでアプリケーションを実行できる
-
-### ✅ 動作確認
-- [ ] エンドポイントのテストが成功
-- [ ] レート制限の動作を確認済み
-- [ ] TCP接続機能をテスト済み
-- [ ] エラーハンドリングを確認済み
-
-### ✅ 開発準備
-- [ ] コーディング規約を理解済み
-- [ ] Git ワークフローを把握済み
-- [ ] コミット規約を理解済み
-- [ ] ブランチ戦略を理解済み
-
-### ✅ 初回貢献
-- [ ] 最初のブランチを作成済み
-- [ ] 小さな変更を実装済み（例：コメント追加、ログ改善）
-- [ ] テストを追加・更新済み
-- [ ] プルリクエストを作成済み
-
----
-
 ## トラブルシューティング
 
 ### よくある問題
-
+S
 #### .NET ランタイムが見つからない
 ```bash
 # 解決方法
@@ -354,37 +235,11 @@ dotnet test -c Release --verbosity normal
 # 詳細なエラーメッセージを確認
 ```
 
----
+## 追加ドキュメント
+- `docs/DESIGN.md` — MVC アーキテクチャ、コントローラ抽象化、データフロー
+- `docs/IMU_DESIGN.md` — IMU プロトコル、通知 DTO、テスト戦略
+- `docs/CONTROLLER_OWNERSHIP.md` — コントローラの所有権モデルと排他制御の詳細
+- `AGENTS.md` / `.cursor/rules` — コーディング規約と開発プロセス
 
-## 次のステップ
-
-### 推奨学習リソース
-1. **ASP.NET Core 公式ドキュメント**
-2. **.NET 8 新機能ガイド**
-3. **イベント駆動アーキテクチャのベストプラクティス**
-4. **セキュリティベストプラクティス**
-
-### 貢献の機会
-1. **新機能の追加**: 認証・認可機能
-2. **テストの拡充**: エッジケースのテスト
-3. **ドキュメントの改善**: API仕様書の作成
-4. **セキュリティの強化**: HTTPS対応、入力検証
-
----
-
-## サポート
-
-### 質問・サポート
-- **技術的な質問**: プロジェクトのIssuesで質問
-- **設計に関する質問**: `docs/DESIGN.md` を参照
-- **コーディング規約**: `.cursor/rules` を参照
-
-### 定期的な確認事項
-- 依存関係の更新
-- セキュリティパッチの適用
-- テストカバレッジの確認
-- パフォーマンスの監視
-
-**オンボーディング完了おめでとうございます！** 🎉
-
-このガイドに従って、プロジェクトに貢献する準備が整いました。何か質問があれば、遠慮なくチームに相談してください。
+## ライセンス
+このプロジェクトは [MIT License](LICENSE) の下で提供されています。
